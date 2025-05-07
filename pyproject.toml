@@ -21,7 +21,7 @@ dependencies = [
     "acres",
     "indexed_gzip <= 1.9.4",
     "looseversion",
-    "networkx == 2.8.8",  # nipype needs networkx, but 3+ isn"t compatible with nipype 1.8.5
+    "networkx == 3.4.2",  # nipype needs networkx, but 3+ isn"t compatible with nipype 1.8.5
     "nibabel <= 5.3.2",
     "nilearn ~= 0.11.0",
     "nipype >= 1.8.5",
