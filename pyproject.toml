@@ -34,7 +34,7 @@ dependencies = [
     "requests",
     "templateflow <= 24.2.2",
     "toml",
-    "torch==2.3.1",
+    "torch==2.7.0",
     "scipy",
     "huggingface_hub",
     "fmriprep",
