@@ -1,0 +1,941 @@
+version: 2.1
+orbs:
+  codecov: codecov/codecov@4.1.0
+
+.dockersetup: &dockersetup
+  docker:
+    - image: pennlinc/ncdlmuse_build:0.0.12
+  working_directory: /src/ncdlmuse
+
+runinstall: &runinstall
+  name: Install ncdlmuse
+  command: |
+    VERSION=0+build
+    if [[ -n "$CIRCLE_TAG" ]]; then
+      VERSION="$CIRCLE_TAG"
+    fi
+    git checkout $CIRCLE_BRANCH
+    echo "${VERSION}" > /src/ncdlmuse/ncdlmuse/VERSION
+    echo "include ncdlmuse/VERSION" >> /src/ncdlmuse/MANIFEST.in
+    pip install .[test] --progress-bar off
+
+    # Write the config file
+    mkdir ~/.nipype
+    CFG=~/.nipype/nipype.cfg
+    printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
+    echo "poll_sleep_duration = 0.01" >> ${CFG}
+    echo "hash_method = content" >> ${CFG}
+
+jobs:
+  build:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+
+  download_anatomical:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Get anatomical derivatives from box
+          command: |
+            cd /src/ncdlmuse/.circleci
+            python get_data.py ${PWD}/data anatomical
+      - save_cache:
+          key: anatomical-v7
+          paths:
+              - /src/ncdlmuse/.circleci/data/anatomical
+
+  download_pcasl_singlepld:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: examples_pcasl_singlepld-v6
+      - run: *runinstall
+      - run:
+          name: Get test data and smriprep from box
+          command: |
+            cd /src/ncdlmuse/.circleci
+            python get_data.py ${PWD}/data examples_pcasl_singlepld
+      - save_cache:
+          key: examples_pcasl_singlepld-v6
+          paths:
+              - /src/ncdlmuse/.circleci/data/examples_pcasl_singlepld
+
+  download_pcasl_multipld:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: examples_pcasl_multipld-v6
+      - run: *runinstall
+      - run:
+          name: Get test data and smriprep from box
+          command: |
+            cd /src/ncdlmuse/.circleci
+            python get_data.py ${PWD}/data examples_pcasl_multipld
+      - save_cache:
+          key: examples_pcasl_multipld-v6
+          paths:
+              - /src/ncdlmuse/.circleci/data/examples_pcasl_multipld
+
+  download_pasl_multipld:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: examples_pasl_multipld-v6
+      - run: *runinstall
+      - run:
+          name: Get test data and smriprep from box
+          command: |
+            cd /src/ncdlmuse/.circleci
+            python get_data.py ${PWD}/data examples_pasl_multipld
+      - save_cache:
+          key: examples_pasl_multipld-v6
+          paths:
+              - /src/ncdlmuse/.circleci/data/examples_pasl_multipld
+
+  download_qtab:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: qtab-v6
+      - run: *runinstall
+      - run:
+          name: Get test data and smriprep from box
+          command: |
+            cd /src/ncdlmuse/.circleci
+            python get_data.py ${PWD}/data qtab
+      - save_cache:
+          key: qtab-v6
+          paths:
+              - /src/ncdlmuse/.circleci/data/qtab
+
+  download_data_test_001:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: test_001-v6
+      - run: *runinstall
+      - run:
+          name: Get test data and smriprep from box
+          command: |
+            cd /src/ncdlmuse/.circleci
+            python get_data.py ${PWD}/data test_001
+      - save_cache:
+          key: test_001-v6
+          paths:
+              - /src/ncdlmuse/.circleci/data/test_001
+
+  download_data_test_002:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: test_002-v7
+      - run: *runinstall
+      - run:
+          name: Get test data and smriprep from box
+          command: |
+            cd /src/ncdlmuse/.circleci
+            python get_data.py ${PWD}/data test_002
+      - save_cache:
+          key: test_002-v7
+          paths:
+              - /src/ncdlmuse/.circleci/data/test_002
+
+  download_data_test_003:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: test_003-v6
+      - run: *runinstall
+      - run:
+          name: Get test data and smriprep from box
+          command: |
+            cd /src/ncdlmuse/.circleci
+            python get_data.py ${PWD}/data test_003
+      - save_cache:
+          key: test_003-v6
+          paths:
+              - /src/ncdlmuse/.circleci/data/test_003
+
+  pcasl_singlepld_philips:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?examples_pcasl_singlepld_philips\]' )" != "" ]]; then
+              echo "Skipping examples_pcasl_singlepld_philips build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: examples_pcasl_singlepld-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on examples_pcasl_singlepld_philips dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "examples_pcasl_singlepld_philips" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.examples_pcasl_singlepld_philips
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.examples_pcasl_singlepld_philips
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
+
+  pcasl_singlepld_siemens:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?examples_pcasl_singlepld_siemens\]' )" != "" ]]; then
+              echo "Skipping examples_pcasl_singlepld_siemens build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: examples_pcasl_singlepld-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on examples_pcasl_singlepld_siemens dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "examples_pcasl_singlepld_siemens" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.examples_pcasl_singlepld_siemens
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.examples_pcasl_singlepld_siemens
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
+
+  pcasl_singlepld_ge:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?examples_pcasl_singlepld\]' )" != "" ]]; then
+              echo "Skipping examples_pcasl_singlepld build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: examples_pcasl_singlepld-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on examples_pcasl_singlepld dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "examples_pcasl_singlepld_ge" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.examples_pcasl_singlepld_ge
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.examples_pcasl_singlepld_ge
+
+  pcasl_multipld:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?examples_pcasl_multipld\]' )" != "" ]]; then
+              echo "Skipping examples_pcasl_multipld build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: examples_pcasl_multipld-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on examples_pcasl_multipld dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "examples_pcasl_multipld" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.examples_pcasl_multipld
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.examples_pcasl_multipld
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
+
+  pasl_multipld:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?examples_pasl_multipld\]' )" != "" ]]; then
+              echo "Skipping examples_pasl_multipld build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: examples_pasl_multipld-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on examples_pasl_multipld dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "examples_pasl_multipld" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.examples_pasl_multipld
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.examples_pasl_multipld
+
+  qtab:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?qtab\]' )" != "" ]]; then
+              echo "Skipping qtab build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: qtab-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on qtab dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "qtab" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.qtab
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.qtab
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
+
+  test_001:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?test_001\]' )" != "" ]]; then
+              echo "Skipping test_001 build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: test_001-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on test_001 dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "test_001" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.test_001
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.test_001
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
+
+  test_002:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?test_002\]' )" != "" ]]; then
+              echo "Skipping test_002 build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: test_002-v7
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on test_002 dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "test_002" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.test_002
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.test_002
+
+  test_003_minimal:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?test_003_minimal\]' )" != "" ]]; then
+              echo "Skipping test_003_minimal build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: test_003-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run minimal ncdlmuse on test_003 dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "test_003_minimal" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.test_003_minimal
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.test_003_minimal
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
+
+  test_003_resampling:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?test_003_resampling\]' )" != "" ]]; then
+              echo "Skipping test_003_resampling build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: test_003-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run resampling ncdlmuse on test_003 dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "test_003_resampling" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.test_003_resampling
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.test_003_resampling
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
+
+  test_003_full:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?test_003_full\]' )" != "" ]]; then
+              echo "Skipping test_003_full build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: test_003-v6
+      - restore_cache:
+          key: anatomical-v7
+      - run: *runinstall
+      - run:
+          name: Run full ncdlmuse on test_003 dataset
+          no_output_timeout: 5h
+          command: |
+            pytest -rP -o log_cli=true -m "test_003_full" --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.test_003_full
+            # remove nifti files before uploading artifacts
+            find /src/ncdlmuse/.circleci/out/ -name "*.nii.gz" -type f -delete
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/out
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.test_003_full
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
+
+  pytests:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /src/ncdlmuse
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?pytests\]' )" != "" ]]; then
+              echo "Skipping pytests build"
+              circleci step halt
+            fi
+      - restore_cache:
+          key: test_001-v6
+      - restore_cache:
+          key: test_003-v6
+      - run: *runinstall
+      - run:
+          name: Run pytest on the tests directory
+          no_output_timeout: 1h
+          command: |
+            pytest --cov-append --cov-report term-missing --cov=ncdlmuse --data_dir=/src/ncdlmuse/.circleci/data --output_dir=/src/ncdlmuse/.circleci/out --working_dir=/src/ncdlmuse/.circleci/work ncdlmuse/tests
+            mkdir /src/coverage
+            mv /src/ncdlmuse/.coverage /src/coverage/.coverage.pytests
+      - persist_to_workspace:
+          root: /src/coverage
+          paths:
+              - .coverage.pytests
+      - store_artifacts:
+          path: /src/ncdlmuse/.circleci/
+
+  merge_coverage:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /src/coverage
+      - run: *runinstall
+      - run:
+          name: Merge coverage files
+          command: |
+            cd /src/coverage/
+            coverage combine
+            coverage xml
+      - store_artifacts:
+          path: /src/coverage
+      - run:
+          # from https://github.com/codecov/codecov-circleci-orb/issues/157#issue-1692263650
+          name: Quick fix for GPG error in Codecov
+          command: mkdir -p ~/.gnupg
+      - codecov/upload:
+          file: /src/coverage/coverage.xml
+
+  deployable:
+    docker:
+      - image: busybox:latest
+    steps:
+      - run: echo Deploying!
+
+  build_and_deploy:
+    environment:
+      TZ: "/usr/share/zoneinfo/America/New_York"
+    docker:
+      - image: cimg/base:2020.09
+    working_directory: /tmp/src/ncdlmuse_build
+    steps:
+      - checkout
+      - setup_remote_docker:
+         version: docker24
+         docker_layer_caching: true
+      - run:
+          name: Build Docker image
+          no_output_timeout: 3h
+          command: |
+            # Get version, update files.
+            THISVERSION=$(python3 -c "from ncdlmuse import __version__; print(__version__)")
+            sed -i "s/title = {ncdlmuse}/title = {ncdlmuse ${CIRCLE_TAG:-$THISVERSION}}/" ncdlmuse/data/boilerplate.bib
+            # Build docker image
+            e=1 && for i in {1..5}; do
+              docker build \
+                --cache-from=pennlinc/ncdlmuse \
+                --rm=false \
+                -t pennlinc/ncdlmuse:latest \
+                --build-arg BUILD_DATE=`date -u +"%Y-%m-%dT%H:%M:%SZ"` \
+                --build-arg VCS_REF=`git rev-parse --short HEAD` \
+                --build-arg VERSION="${CIRCLE_TAG:-$THISVERSION}" . \
+              && e=0 && break || sleep 15
+            done && [ "$e" -eq "0" ]
+      - run:
+          name: Deploy to Docker Hub
+          no_output_timeout: 40m
+          command: |
+            if [[ -n "$DOCKERHUB_TOKEN" ]]; then
+              docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+              docker tag pennlinc/ncdlmuse pennlinc/ncdlmuse:unstable
+              docker push pennlinc/ncdlmuse:unstable
+              if [[ -n "$CIRCLE_TAG" ]]; then
+                docker push pennlinc/ncdlmuse:latest
+                docker tag pennlinc/ncdlmuse pennlinc/ncdlmuse:$CIRCLE_TAG
+                docker push pennlinc/ncdlmuse:$CIRCLE_TAG
+              fi
+            fi
+
+workflows:
+  version: 2
+  build_test_deploy:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /.*/
+
+      - download_anatomical:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - download_pcasl_singlepld:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - download_pcasl_multipld:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - download_pasl_multipld:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - download_qtab:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - download_data_test_001:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - download_data_test_002:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - download_data_test_003:
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - pcasl_singlepld_philips:
+          requires:
+            - download_pcasl_singlepld
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - pcasl_singlepld_siemens:
+          requires:
+            - download_pcasl_singlepld
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - pcasl_singlepld_ge:
+          requires:
+            - download_pcasl_singlepld
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - pcasl_multipld:
+          requires:
+            - download_pcasl_multipld
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - pasl_multipld:
+          requires:
+            - download_pasl_multipld
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - qtab:
+          requires:
+            - download_qtab
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - test_001:
+          requires:
+            - download_data_test_001
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - test_002:
+          requires:
+            - download_data_test_002
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - test_003_minimal:
+          requires:
+            - download_data_test_003
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - test_003_resampling:
+          requires:
+            - download_data_test_003
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - test_003_full:
+          requires:
+            - download_data_test_003
+            - download_anatomical
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - pytests:
+          requires:
+            - download_data_test_001
+            - download_data_test_002
+            - download_data_test_003
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - merge_coverage:
+          requires:
+            - pcasl_singlepld_philips
+            - pcasl_singlepld_siemens
+            - pcasl_singlepld_ge
+            - pcasl_multipld
+            - pasl_multipld
+            - qtab
+            - test_001
+            - test_002
+            - test_003_minimal
+            - test_003_resampling
+            - test_003_full
+            - pytests
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - deployable:
+          requires:
+            - build
+            - pcasl_singlepld_philips
+            - pcasl_singlepld_siemens
+            - pcasl_singlepld_ge
+            - pcasl_multipld
+            - pasl_multipld
+            - qtab
+            - test_001
+            - test_002
+            - test_003_minimal
+            - test_003_resampling
+            - test_003_full
+          filters:
+            branches:
+              only: main
+            tags:
+              only: /.*/
+
+      - build_and_deploy:
+          requires:
+            - deployable
+          filters:
+            branches:
+              only: main
+            tags:
+              only: /.*/

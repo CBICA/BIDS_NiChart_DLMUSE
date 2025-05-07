@@ -1,0 +1,5 @@
+{
+    "IndexMUSE": "The original index number assigned to each brain region in the MUSE atlas",
+    "IndexConsecutive": "A sequential index number (0-based) assigned to each brain region",
+    "ROINameMUSE": "The name of the Region of Interest (ROI) in the MUSE brain atlas"
+} 

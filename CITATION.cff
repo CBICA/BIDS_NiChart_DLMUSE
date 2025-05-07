@@ -1,0 +1,37 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  BIDS_NiChart_DLMUSE: A BIDS-app wrapper for NiChart DLMUSE
+message: >-
+  If you use this software, please cite
+  (doi:).
+type: software
+authors:
+  - given-names:
+    family-names:
+    email:
+    affiliation:
+    orcid:
+identifiers:
+  - type:
+    value:
+    description:
+repository-code: 'https://github.com/CBICA/BIDS_NiChart_DLMUSE'
+url: 'https://cbica.github.io/NiChart_DLMUSE'
+abstract: >-
+  NiChart_DLMUSE is a package that allows the users to process their brain imaging (sMRI) 
+  data easily and efficiently.
+
+  NiChart_DLMUSE offers easy ICV (Intra-Cranial Volume) mask extraction, and brain 
+  segmentation into ROIs. This is achieved through the DLICV and DLMUSE methods. 
+  Intermediate step results are saved for easy access to the user.
+keywords:
+  - DLMUSE
+  - DLICV
+  - BIDS-App
+  - Neuroimaging
+license: BSD-3-Clause
+version: 0.7.5
+date-released: '2025-01-08'

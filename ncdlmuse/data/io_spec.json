@@ -1,0 +1,20 @@
+{
+  "ds_volumes_json": {
+    "datatype": "anat",
+    "suffix": "T1w",
+    "extension": "json"
+  },
+  "ds_seg_nii": {
+    "datatype": "anat",
+    "space": "T1w",
+    "suffix": "dseg",
+    "extension": "nii.gz",
+    "segmentation": "DLMUSE"
+  },
+  "ds_brain_mask": {
+    "datatype": "anat",
+    "desc": "brain",
+    "suffix": "mask",
+    "extension": "nii.gz"
+  }
+}

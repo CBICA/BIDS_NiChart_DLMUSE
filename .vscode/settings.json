@@ -1,0 +1,10 @@
+{
+    "[restructuredtext]": {
+        "editor.tabSize": 3,
+        "editor.rulers": [99]
+    },
+    "[python]": {
+        "editor.rulers": [99]
+    },
+    "python.analysis.typeCheckingMode": "off",
+}

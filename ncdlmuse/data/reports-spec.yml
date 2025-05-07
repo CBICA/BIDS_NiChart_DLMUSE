@@ -1,0 +1,60 @@
+package: ncdlmuse
+title: Visual report for participant '{subject}' - NCDLMUSE
+# Configure filtering to be more permissive
+config:
+  bids_filters: {}
+  ignore_subject_ses_for_html: true  # Allow HTML files at the subject level regardless of session
+  # Add specific search paths to include the figures directory
+  search_paths:
+    - "{output_dir}/sub-{subject}/figures"
+    - "{output_dir}/sub-{subject}"
+
+sections:
+- name: Summary
+  reportlets:
+  - bids: {datatype: figures, desc: summary, suffix: T1w, extension: [.html]}
+
+- name: Anatomical Processing Summary
+  reportlets:
+    - title: Brain Mask
+      description: Brain mask overlaid on the T1w image.
+      static: True
+      bids:
+        datatype: figures
+        desc: brainMask
+        extension: .svg
+
+    - title: DLMUSE Segmentation
+      description: DLMUSE segmentation overlaid on the T1w image.
+      static: True
+      bids:
+        datatype: figures
+        desc: dlmuseSegmentation
+        extension: .svg
+
+    - title: Segmentation Volume Summary
+      description: "Summary of key volumes (in mm&sup3;) derived from the DLMUSE segmentation."
+      bids:
+        datatype: figures
+        desc: segmentationVolumes # Matches the desc in the datasink
+        extension: [.html]
+
+- name: About
+  reportlets:
+  - bids: {datatype: figures, desc: about, suffix: T1w, extension: [.html]}
+
+- name: Execution Details
+  reportlets:
+    - title: Workflow Provenance
+      description: "Provenance information from the workflow, including hardware (e.g., CUDA version) and software environment details."
+      bids:
+        datatype: figures
+        desc: workflowProvenance
+        extension: [.html, .txt]
+
+    - title: Error Reporting
+      description: "Summary of errors and warnings encountered during processing."
+      bids:
+        datatype: figures
+        desc: processingErrors
+        extension: [.html, .txt, .log]
