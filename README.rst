@@ -6,7 +6,7 @@
 About
 *****
 
-This pipeline is a BIDS-App wrapper for `NiChart DLMUSE <https://github.com/CBICA/NiChart_DLMUSE/tree/main>`_, a tool for brain segmentation.
+This is a BIDS-App wrapper for `NiChart DLMUSE <https://github.com/CBICA/NiChart_DLMUSE/tree/main>`_, a tool for brain mask extraction, and brain segmentation.
 
 Installation
 ------------
