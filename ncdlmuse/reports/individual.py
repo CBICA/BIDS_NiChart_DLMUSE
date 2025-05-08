@@ -93,24 +93,47 @@ def generate_reports(
             config.loggers.cli.info(f'Main HTML will be: {final_html_path}')
             config.loggers.cli.info(
                 f'Reportlets base dir for nireports: {reportlets_dir_for_nireport}')
-            config.loggers.cli.info(f'Bootstrap file for nireports: {spec_file_path}')
 
-            # Prepare entities to be passed as keyword arguments to nireports.Report
-            # These are used for BIDS filtering and for string formatting in the spec file.
-            report_constructor_kwargs = {
-                'bootstrap_file': loaded_bootstrap_config, # Use the loaded dict
+            # Determine how to pass bootstrap_file information to nireports.Report
+            # It can be a path (bootstrap_file=) or a preloaded dict (config=)
+            actual_spec_file_path_for_report = None
+            preloaded_spec_dict_for_report = None
+            if bootstrap_file is None: # Initial bootstrap_file from generate_reports args
+                actual_spec_file_path_for_report = data.load('reports-spec.yml')
+            elif isinstance(bootstrap_file, str | Path):
+                actual_spec_file_path_for_report = Path(bootstrap_file)
+            elif isinstance(bootstrap_file, dict):
+                preloaded_spec_dict_for_report = bootstrap_file
+
+            if actual_spec_file_path_for_report:
+                config.loggers.cli.info(
+                    f'Bootstrap file for nireports: {actual_spec_file_path_for_report}'
+                    )
+            elif preloaded_spec_dict_for_report:
+                config.loggers.cli.info('Using preloaded bootstrap config for nireports.')
+
+            # Prepare NAMED configuration arguments for nireports.Report
+            report_named_config_args = {
+                'layout': layout, # The BIDSLayout object
                 'out_filename': out_html_filename,
                 'reportlets_dir': str(reportlets_dir_for_nireport),
+            }
+            if actual_spec_file_path_for_report:
+                report_named_config_args['bootstrap_file'] = actual_spec_file_path_for_report
+            if preloaded_spec_dict_for_report:
+                report_named_config_args['config'] = preloaded_spec_dict_for_report
+
+            # Prepare BIDS ENTITY filters for nireports.Report
+            # (passed via **kwargs to populate **bids_filters)
+            bids_entity_filters = {
                 'subject': subject_id_for_report,
-                'output_dir': str(report_save_directory), # For meta_repl
-                'invalid_filters': 'allow',
             }
 
             if session_list and len(session_list) == 1:
                 session_id_for_entity = session_list[0].lstrip('ses-')
                 if layout.get_sessions(
                     subject=subject_id_for_report, session=session_id_for_entity):
-                    report_constructor_kwargs['session'] = session_id_for_entity
+                    bids_entity_filters['session'] = session_id_for_entity
                 else:
                     config.loggers.cli.warning(
                         f"Specified session '{session_id_for_entity}' not found for subject "
@@ -122,7 +145,8 @@ def generate_reports(
                     f"'{subject_id_for_report}'. Report will be subject-level. "
                     f"Session-specific components depend on spec file."
                 )
-
+            
+            # Ensure dataset_description.json for subject figures dir (this part can remain as is)
             subject_figures_dir = output_dir_path / subject_label_with_prefix / 'figures'
             if subject_figures_dir.is_dir():
                 figures_ds_desc = subject_figures_dir / 'dataset_description.json'
@@ -137,12 +161,12 @@ def generate_reports(
                             }]
                     }, figures_ds_desc.open('w'), indent=2)
 
-            # === Instantiate Report with real BIDSLayout object ===
+            # Call Report with cleanly separated arguments
             robj = Report(
-                str(report_save_directory),  # out_dir
-                run_uuid,                    # run_uuid
-                layout=layout,               # pass the BIDSLayout here
-                **report_constructor_kwargs
+                str(report_save_directory),    # 1. Positional: out_dir
+                run_uuid,                      # 2. Positional: run_uuid
+                **report_named_config_args,    # Named config params for Report
+                **bids_entity_filters          # BIDS entity filters (subject, session)
             )
 
             robj.generate_report()
