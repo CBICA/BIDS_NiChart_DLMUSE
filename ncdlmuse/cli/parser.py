@@ -655,7 +655,7 @@ def parse_args(args=None, namespace=None):
                     handler.close()  # Attempt to close handler
                 except Exception:
                     pass  # Ignore errors during handler closing
-    
+
     # Allow Nipype logs to propagate to our handlers
     logging.getLogger('nipype.workflow').propagate = True
 

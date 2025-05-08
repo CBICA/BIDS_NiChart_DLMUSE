@@ -43,7 +43,6 @@ def generate_reports(
 ):
     """
     Generate reports for a list of subjects using nireports.
-    Adopts the fMRIPrep pattern for instantiating nireports.Report.
     """
     report_errors = []
 
@@ -104,6 +103,7 @@ def generate_reports(
                 'layout': layout,
                 'subject': subject_id_for_report,
                 'output_dir': str(report_save_directory), # For meta_repl
+                'invalid_filters': 'allow',
             }
 
             if session_list and len(session_list) == 1:
