@@ -59,17 +59,18 @@ def generate_reports(
     if isinstance(subject_list, str):
         subject_list = [subject_list]
 
-    # Initial loading of spec_file_path_to_load (if bootstrap_file is a path or None)
-    # This part was corrected for proper try/except/else structure.
-    loaded_bootstrap_config = {} # This will hold the dict from yaml.safe_load
+    # Determine how to pass bootstrap_file information to nireports.Report
+    # It can be a path (bootstrap_file=) or a preloaded dict (config=)
+    actual_spec_file_path = None
+    preloaded_spec_dict = None
     if bootstrap_file is None:
-        spec_file_path = data.load('reports-spec.yml')
-        # try to load spec_file_path into loaded_bootstrap_config
+        # Default to the packaged reports-spec.yml
+        actual_spec_file_path = data.load('reports-spec.yml')
     elif isinstance(bootstrap_file, str | Path):
-        spec_file_path = Path(bootstrap_file)
-        # try to load spec_file_path into loaded_bootstrap_config
+        actual_spec_file_path = Path(bootstrap_file)
     elif isinstance(bootstrap_file, dict):
-        loaded_bootstrap_config = bootstrap_file
+        # bootstrap_file is already a loaded dictionary
+        preloaded_spec_dict = bootstrap_file
     else:
         # error
         return 1
@@ -94,22 +95,9 @@ def generate_reports(
             config.loggers.cli.info(
                 f'Reportlets base dir for nireports: {reportlets_dir_for_nireport}')
 
-            # Determine how to pass bootstrap_file information to nireports.Report
-            # It can be a path (bootstrap_file=) or a preloaded dict (config=)
-            actual_spec_file_path_for_report = None
-            preloaded_spec_dict_for_report = None
-            if bootstrap_file is None: # Initial bootstrap_file from generate_reports args
-                actual_spec_file_path_for_report = data.load('reports-spec.yml')
-            elif isinstance(bootstrap_file, str | Path):
-                actual_spec_file_path_for_report = Path(bootstrap_file)
-            elif isinstance(bootstrap_file, dict):
-                preloaded_spec_dict_for_report = bootstrap_file
-
-            if actual_spec_file_path_for_report:
-                config.loggers.cli.info(
-                    f'Bootstrap file for nireports: {actual_spec_file_path_for_report}'
-                    )
-            elif preloaded_spec_dict_for_report:
+            if actual_spec_file_path:
+                config.loggers.cli.info(f'Bootstrap file for nireports: {actual_spec_file_path}')
+            elif preloaded_spec_dict:
                 config.loggers.cli.info('Using preloaded bootstrap config for nireports.')
 
             # Prepare NAMED configuration arguments for nireports.Report
@@ -118,15 +106,16 @@ def generate_reports(
                 'out_filename': out_html_filename,
                 'reportlets_dir': str(reportlets_dir_for_nireport),
             }
-            if actual_spec_file_path_for_report:
-                report_named_config_args['bootstrap_file'] = actual_spec_file_path_for_report
-            if preloaded_spec_dict_for_report:
-                report_named_config_args['config'] = preloaded_spec_dict_for_report
+            if actual_spec_file_path:
+                report_named_config_args['bootstrap_file'] = actual_spec_file_path
+            if preloaded_spec_dict:
+                report_named_config_args['config'] = preloaded_spec_dict
 
-            # Prepare BIDS ENTITY filters for nireports.Report
-            # (passed via **kwargs to populate **bids_filters)
+            # Prepare BIDS ENTITY filters for nireports.Report (passed via **kwargs).
+            # This dictionary also serves to provide values for meta_repl in nireports.
             bids_entity_filters = {
                 'subject': subject_id_for_report,
+                'output_dir': str(report_save_directory), # For meta_repl in reports-spec.yml
             }
 
             if session_list and len(session_list) == 1:
@@ -163,10 +152,10 @@ def generate_reports(
 
             # Call Report with cleanly separated arguments
             robj = Report(
-                str(report_save_directory),    # 1. Positional: out_dir
-                run_uuid,                      # 2. Positional: run_uuid
-                **report_named_config_args,    # Named config params for Report
-                **bids_entity_filters          # BIDS entity filters (subject, session)
+                str(report_save_directory),  # 1. Positional: out_dir
+                run_uuid,                    # 2. Positional: run_uuid
+                **report_named_config_args,  # Named config params for Report
+                **bids_entity_filters        # BIDS entity filters (subject, session)
             )
 
             robj.generate_report()
