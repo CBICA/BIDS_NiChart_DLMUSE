@@ -1193,7 +1193,7 @@ def _create_volumes_json_file(
     # Return the absolute path to the created JSON file
     return str(out_file_path)
 
-# Helper functions inspired by fMRIPrep
+# Helper functions
 def _prefix(subid):
     """Ensure subject ID is prefixed with 'sub-'."""
     return subid if subid.startswith('sub-') else f'sub-{subid}'

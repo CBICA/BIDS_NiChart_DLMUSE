@@ -20,6 +20,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
+
 from pathlib import Path
 import yaml
 import re
@@ -35,11 +36,11 @@ def generate_reports(
     subject_list,
     output_dir, # This is the main derivatives output directory (e.g., .../ncdlmuse/)
     run_uuid,
-    session_list=None, # List of session labels (without 'ses-' prefix)
-    bootstrap_file=None, # Path to reports-spec.yml (string or Path)
+    session_list=None,    # List of session labels (without 'ses-' prefix)
+    bootstrap_file=None,  # Path to reports-spec.yml (string or Path)
     work_dir=None,
     boilerplate_only=False,
-    layout: BIDSLayout = None, # The BIDSLayout object (already includes derivatives)
+    layout: BIDSLayout = None,  # The BIDSLayout object (already includes derivatives)
 ):
     """
     Generate reports for a list of subjects using nireports.
@@ -100,7 +101,6 @@ def generate_reports(
                 'bootstrap_file': loaded_bootstrap_config, # Use the loaded dict
                 'out_filename': out_html_filename,
                 'reportlets_dir': str(reportlets_dir_for_nireport),
-                'layout': layout,
                 'subject': subject_id_for_report,
                 'output_dir': str(report_save_directory), # For meta_repl
                 'invalid_filters': 'allow',
@@ -137,9 +137,11 @@ def generate_reports(
                             }]
                     }, figures_ds_desc.open('w'), indent=2)
 
+            # === Instantiate Report with real BIDSLayout object ===
             robj = Report(
-                str(report_save_directory),    # 1. Positional: out_dir
-                run_uuid,                      # 2. Positional: run_uuid
+                str(report_save_directory),  # out_dir
+                run_uuid,                    # run_uuid
+                layout=layout,               # pass the BIDSLayout here
                 **report_constructor_kwargs
             )
 
