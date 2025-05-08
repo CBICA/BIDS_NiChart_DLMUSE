@@ -22,8 +22,6 @@
 #
 
 from pathlib import Path
-import yaml
-import re
 import json
 
 from nireports.assembler.report import Report
@@ -33,19 +31,19 @@ from ncdlmuse import config, data
 
 
 def generate_reports(
-    subject_list,
-    output_dir, # This is the main derivatives output directory (e.g., .../ncdlmuse/)
-    run_uuid,
-    session_list=None,    # List of session labels (without 'ses-' prefix)
-    bootstrap_file=None,  # Path to reports-spec.yml (string or Path)
-    work_dir=None,
-    boilerplate_only=False,
-    layout: BIDSLayout = None,  # The BIDSLayout object (already includes derivatives)
-):
+    subject_list: list[str] | str,
+    output_dir: str | Path, # Main output directory (e.g., <bids_root>/derivatives/)
+    run_uuid: str,
+    session_list: list[str] | None = None,    # List of session labels (WITHOUT 'ses-' prefix)
+    bootstrap_file: str | Path | None = None, # Path to reports-spec.yml
+    work_dir: str | Path | None = None,       # Not actively used by ncdlmuse reports currently
+    boilerplate_only: bool = False,
+    layout: BIDSLayout | None = None, # The BIDSLayout object (already includes derivatives)
+) -> int:
     """
     Generate reports for a list of subjects using nireports.
     """
-    report_errors = []
+    report_errors: list[str] = []
 
     if not layout:
         config.loggers.cli.error(
@@ -53,122 +51,157 @@ def generate_reports(
         )
         return 1
 
-    output_dir_path = Path(output_dir).absolute()
-    reportlets_dir_for_nireport = output_dir_path
+    # This is the NCDLMUSE derivatives directory, e.g. <output_dir>/ncdlmuse
+    # It's where subject-level reports are saved and the base for finding reportlet SVGs.
+    ncdlmuse_derivatives_dir = Path(output_dir).absolute()
+    
+    # For nireports, reportlets_dir is the base from which <subject_label>/figures/... is resolved
+    reportlets_dir_for_nireports = ncdlmuse_derivatives_dir
 
     if isinstance(subject_list, str):
         subject_list = [subject_list]
 
-    # Determine how to pass bootstrap_file information to nireports.Report
-    # Report will always be loaded from a spec file path.
-    actual_spec_file_path = None
-    if bootstrap_file is None:
-        # Default to the packaged reports-spec.yml
-        actual_spec_file_path = data.load('reports-spec.yml')
-    elif isinstance(bootstrap_file, str | Path):
-        actual_spec_file_path = Path(bootstrap_file)
-    else:
-        config.loggers.cli.error(
-            f"Invalid bootstrap_file type: {type(bootstrap_file)}. Expected path or None."
-        )
-        return 1 # Invalid input type
+    for subject_label_with_prefix in subject_list: # e.g., "sub-01"
+        subject_id_for_report = subject_label_with_prefix.lstrip('sub-') # "01"
 
-    for subject_label_with_prefix in subject_list:
-        subject_id_for_report = subject_label_with_prefix.lstrip('sub-')
-        report_save_directory = Path(output_dir).absolute() # Ensure it's a Path
+        # Determine the bootstrap file to use
+        current_bootstrap_file_path: Path | None = None
+        if bootstrap_file is not None:
+            current_bootstrap_file_path = Path(bootstrap_file)
+        else:
+            current_bootstrap_file_path = data.load('reports-spec.yml')
+
+        if not current_bootstrap_file_path or not current_bootstrap_file_path.exists():
+            config.loggers.cli.error(
+                f'Bootstrap file not found: {current_bootstrap_file_path}. '
+                f'Skipping report for {subject_label_with_prefix}.'
+            )
+            report_errors.append(subject_label_with_prefix)
+            continue
+            
+        # Define the main HTML report filename for this subject
+        # Reports are saved in the ncdlmuse_derivatives, e.g. <ncdlmuse_derivatives>/sub-01.html
         out_html_filename = f'{subject_label_with_prefix}.html'
+        final_html_path = ncdlmuse_derivatives_dir / out_html_filename
 
         if boilerplate_only:
-            config.loggers.cli.info(f'Generating boilerplate for {subject_label_with_prefix}...')
-            Path(report_save_directory / f'{subject_label_with_prefix}_CITATION.md').write_text(
-                f'# Boilerplate for {subject_label_with_prefix}\n'
-                f'NCDLMUSE Version: {config.environment.version}'
+            # Generate boilerplate for NCDLMUSE
+            # Using ncdlmuse_derivatives_dir as the save location for boilerplate
+            boilerplate_path = ncdlmuse_derivatives_dir / \
+                f'{subject_label_with_prefix}_CITATION.md'
+            config.loggers.cli.info(
+                f'Generating boilerplate for {subject_label_with_prefix} at {boilerplate_path}'
             )
+            # Basic boilerplate content, can be expanded
+            boilerplate_content = (
+                f'# Boilerplate for {subject_label_with_prefix}\n\n'
+                f'NCDLMUSE Version: {config.environment.version}\n'
+                # Add more details as needed, e.g., from config.execution or citations
+            )
+            try:
+                boilerplate_path.parent.mkdir(parents=True, exist_ok=True)
+                boilerplate_path.write_text(boilerplate_content)
+            except Exception as e:
+                config.loggers.cli.error(
+                    f'Failed to write boilerplate for {subject_label_with_prefix}: {e}'
+                )
+                report_errors.append(subject_label_with_prefix)
             continue
 
+        config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
+        config.loggers.cli.info(f'  Output HTML: {final_html_path}')
+        config.loggers.cli.info(f'  Reportlets base: {reportlets_dir_for_nireports}')
+        config.loggers.cli.info(f'  Bootstrap specification: {current_bootstrap_file_path}')
+
         try:
-            final_html_path = report_save_directory / out_html_filename
-            config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
-            config.loggers.cli.info(f'Main HTML will be: {final_html_path}')
-            config.loggers.cli.info(
-                f'Reportlets base dir for nireports: {reportlets_dir_for_nireport}')
-
-            if actual_spec_file_path:
-                config.loggers.cli.info(f'Using bootstrap spec file: {actual_spec_file_path}')
-
-            # Prepare NAMED configuration arguments for nireports.Report
-            report_named_config_args = {
-                'layout': layout,
-                'out_filename': out_html_filename,
-                'reportlets_dir': str(reportlets_dir_for_nireport),
-            }
-            if actual_spec_file_path:
-                report_named_config_args['bootstrap_file'] = actual_spec_file_path
-
-            # Prepare BIDS ENTITY filters for nireports.Report (passed via **kwargs).
-            # This dictionary also serves to provide values for meta_repl in nireports.
-            bids_entity_filters = {
-                'subject': subject_id_for_report,
-                'output_dir': str(report_save_directory), # For meta_repl in reports-spec.yml
-                'invalid_filters': 'allow', # Allow non-BIDS entities in filters for meta_repl
-            }
-
-            if session_list and len(session_list) == 1:
-                session_id_for_entity = session_list[0].lstrip('ses-')
-                if layout.get_sessions(
-                    subject=subject_id_for_report, session=session_id_for_entity):
-                    bids_entity_filters['session'] = session_id_for_entity
-                else:
-                    config.loggers.cli.warning(
-                        f"Specified session '{session_id_for_entity}' not found for subject "
-                        f"'{subject_id_for_report}'. Not passing session to Report constructor."
-                    )
-            elif session_list and len(session_list) > 1:
-                config.loggers.cli.warning(
-                    f"Multiple sessions provided ({session_list}) for subject "
-                    f"'{subject_id_for_report}'. Report will be subject-level. "
-                    f"Session-specific components depend on spec file."
-                )
-            
-            # Ensure dataset_description.json for subject figures dir (this part can remain as is)
-            subject_figures_dir = output_dir_path / subject_label_with_prefix / 'figures'
-            if subject_figures_dir.is_dir():
-                figures_ds_desc = subject_figures_dir / 'dataset_description.json'
-                if not figures_ds_desc.exists():
-                     json.dump({
+            # Ensure dataset_description.json for subject figures dir
+            # Figures are expected at <ncdlmuse_derivatives>/<subject_label_with_prefix>/figures/
+            subject_figures_dir = ncdlmuse_derivatives_dir / subject_label_with_prefix / 'figures'
+            if subject_figures_dir.is_dir(): # Only create if figures dir itself exists
+                figures_ds_desc_path = subject_figures_dir / 'dataset_description.json'
+                if not figures_ds_desc_path.exists():
+                    ds_desc_content = {
                         'Name': f'{subject_label_with_prefix} NCDLMUSE Reportlets',
-                        'BIDSVersion': '1.4.1',
+                        'BIDSVersion': config.bids.version, # Use BIDS version from config
                         'DatasetType': 'derivative',
                         'GeneratedBy': [{
                             'Name': 'ncdlmuse',
                             'Version': config.environment.version
-                            }]
-                    }, figures_ds_desc.open('w'), indent=2)
+                        }]
+                    }
+                    figures_ds_desc_path.parent.mkdir(parents=True, exist_ok=True)
+                    with figures_ds_desc_path.open('w') as f:
+                        json.dump(ds_desc_content, f, indent=2)
+            
+            # Prepare NAMED configuration arguments for nireports.Report
+            report_named_config_args = {
+                'layout': layout,
+                'out_filename': out_html_filename, # Name of html file, saved in out_dir
+                'reportlets_dir': str(reportlets_dir_for_nireports),
+                'bootstrap_file': current_bootstrap_file_path,
+            }
+
+            # Prepare BIDS ENTITY filters and other settings for nireports.Report
+            bids_entity_filters_and_settings = {
+                'subject': subject_id_for_report,
+                # output_dir is for {output_dir} replacement in reports-spec.yml.
+                # It refers to the ncdlmuse derivatives directory.
+                'output_dir': str(ncdlmuse_derivatives_dir),
+                'invalid_filters': 'allow', 
+            }
+
+            # Handle session if a single session is specified
+            processed_session_list = \
+                [s.lstrip('ses-') for s in session_list] if session_list else []
+            if len(processed_session_list) == 1:
+                session_id_for_entity = processed_session_list[0]
+                # Validate session existence for the subject
+                if layout.get_sessions(
+                    subject=subject_id_for_report, 
+                    session=session_id_for_entity
+                    ):
+                    bids_entity_filters_and_settings['session'] = session_id_for_entity
+                    config.loggers.cli.info(
+                        f'  Processing report for session: {session_id_for_entity}'
+                    )
+                else:
+                    config.loggers.cli.warning(
+                        f"Specified session '{session_id_for_entity}' not found for subject "
+                        f"'{subject_id_for_report}'. Generating subject-level report."
+                    )
+            elif len(processed_session_list) > 1:
+                config.loggers.cli.warning(
+                    f'Multiple sessions provided ({processed_session_list}) for subject '
+                    f"'{subject_id_for_report}'. Generating subject-level report. "
+                    f'Session-specific information depends on spec file queries if any.'
+                )
 
             # Call Report with cleanly separated arguments
+            # The first argument to Report is where the HTML file (out_filename) will be saved.
             robj = Report(
-                str(report_save_directory),  # 1. Positional: out_dir
-                run_uuid,                    # 2. Positional: run_uuid
-                **report_named_config_args,  # Named config params for Report
-                **bids_entity_filters        # BIDS entity filters (subject, session)
+                str(ncdlmuse_derivatives_dir), # Directory to save the main HTML report
+                run_uuid,
+                **report_named_config_args,
+                **bids_entity_filters_and_settings
             )
 
             robj.generate_report()
             config.loggers.cli.info(
-                f'Successfully generated report for {subject_label_with_prefix} at '
-                f'{final_html_path}'
+                f"Successfully generated report for {subject_label_with_prefix} at "
+                f"{final_html_path}"
             )
 
         except Exception as e:
-            err_msg = f'Report generation failed for {subject_label_with_prefix}: {e}'
-            config.loggers.cli.error(err_msg, exc_info=True)
+            err_msg = f"Report generation failed for {subject_label_with_prefix}: {e}"
+            config.loggers.cli.error(err_msg, exc_info=True) # Log full traceback
             report_errors.append(subject_label_with_prefix)
 
     if report_errors:
         joined_error_subjects = ', '.join(report_errors)
         config.loggers.cli.error(
-            f'Report generation failed for the following subjects: {joined_error_subjects}'
+            f"Report generation failed for the following subjects: {joined_error_subjects}"
         )
         return 1
 
+    config.loggers.cli.info("All reports generated successfully.")
     return 0

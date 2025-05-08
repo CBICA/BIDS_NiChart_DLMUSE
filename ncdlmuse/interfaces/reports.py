@@ -331,7 +331,7 @@ class SegmentationQCSummary(SummaryInterface):
                             f'<li><strong>{display_name}:</strong> {value} '
                             f'(could not format as number)</li>'
                         )
-            
+
             if not items_html_list:
                 return '<p>No specified segmentation volumes found in the JSON file.</p>'
 
