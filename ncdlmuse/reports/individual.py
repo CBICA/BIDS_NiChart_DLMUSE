@@ -102,7 +102,7 @@ def generate_reports(
 
             # Prepare NAMED configuration arguments for nireports.Report
             report_named_config_args = {
-                'layout': layout, # The BIDSLayout object
+                # 'layout': layout, # The BIDSLayout object
                 'out_filename': out_html_filename,
                 'reportlets_dir': str(reportlets_dir_for_nireport),
             }
