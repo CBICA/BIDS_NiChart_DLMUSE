@@ -60,20 +60,18 @@ def generate_reports(
         subject_list = [subject_list]
 
     # Determine how to pass bootstrap_file information to nireports.Report
-    # It can be a path (bootstrap_file=) or a preloaded dict (config=)
+    # Report will always be loaded from a spec file path.
     actual_spec_file_path = None
-    preloaded_spec_dict = None
     if bootstrap_file is None:
         # Default to the packaged reports-spec.yml
         actual_spec_file_path = data.load('reports-spec.yml')
     elif isinstance(bootstrap_file, str | Path):
         actual_spec_file_path = Path(bootstrap_file)
-    elif isinstance(bootstrap_file, dict):
-        # bootstrap_file is already a loaded dictionary
-        preloaded_spec_dict = bootstrap_file
     else:
-        # error
-        return 1
+        config.loggers.cli.error(
+            f"Invalid bootstrap_file type: {type(bootstrap_file)}. Expected path or None."
+        )
+        return 1 # Invalid input type
 
     for subject_label_with_prefix in subject_list:
         subject_id_for_report = subject_label_with_prefix.lstrip('sub-')
@@ -96,19 +94,16 @@ def generate_reports(
                 f'Reportlets base dir for nireports: {reportlets_dir_for_nireport}')
 
             if actual_spec_file_path:
-                config.loggers.cli.info(f'Bootstrap file for nireports: {actual_spec_file_path}')
-            elif preloaded_spec_dict:
-                config.loggers.cli.info('Using preloaded bootstrap config for nireports.')
+                config.loggers.cli.info(f'Using bootstrap spec file: {actual_spec_file_path}')
 
             # Prepare NAMED configuration arguments for nireports.Report
             report_named_config_args = {
+                'layout': layout,
                 'out_filename': out_html_filename,
                 'reportlets_dir': str(reportlets_dir_for_nireport),
             }
             if actual_spec_file_path:
                 report_named_config_args['bootstrap_file'] = actual_spec_file_path
-            if preloaded_spec_dict:
-                report_named_config_args['config'] = preloaded_spec_dict
 
             # Prepare BIDS ENTITY filters for nireports.Report (passed via **kwargs).
             # This dictionary also serves to provide values for meta_repl in nireports.
@@ -158,7 +153,6 @@ def generate_reports(
                 **bids_entity_filters        # BIDS entity filters (subject, session)
             )
 
-            robj.layout = layout
             robj.generate_report()
             config.loggers.cli.info(
                 f'Successfully generated report for {subject_label_with_prefix} at '
