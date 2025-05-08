@@ -102,7 +102,6 @@ def generate_reports(
 
             # Prepare NAMED configuration arguments for nireports.Report
             report_named_config_args = {
-                # 'layout': layout, # The BIDSLayout object
                 'out_filename': out_html_filename,
                 'reportlets_dir': str(reportlets_dir_for_nireport),
             }
@@ -116,6 +115,7 @@ def generate_reports(
             bids_entity_filters = {
                 'subject': subject_id_for_report,
                 'output_dir': str(report_save_directory), # For meta_repl in reports-spec.yml
+                'invalid_filters': 'allow', # Allow non-BIDS entities in filters for meta_repl
             }
 
             if session_list and len(session_list) == 1:
@@ -158,6 +158,7 @@ def generate_reports(
                 **bids_entity_filters        # BIDS entity filters (subject, session)
             )
 
+            robj.layout = layout
             robj.generate_report()
             config.loggers.cli.info(
                 f'Successfully generated report for {subject_label_with_prefix} at '
