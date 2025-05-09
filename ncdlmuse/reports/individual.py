@@ -135,7 +135,6 @@ def generate_reports(
             
             # Prepare NAMED configuration arguments for nireports.Report
             report_named_config_args = {
-                'layout': layout,
                 'out_filename': out_html_filename, # Name of html file, saved in out_dir
                 'reportlets_dir': str(reportlets_dir_for_nireports),
                 'bootstrap_file': current_bootstrap_file_path,
@@ -149,7 +148,7 @@ def generate_reports(
                 'output_dir': str(ncdlmuse_derivatives_dir),
                 'invalid_filters': 'allow', 
             }
-
+            
             # Handle session if a single session is specified
             processed_session_list = \
                 [s.lstrip('ses-') for s in session_list] if session_list else []
@@ -176,20 +175,43 @@ def generate_reports(
                     f'Session-specific information depends on spec file queries if any.'
                 )
 
-            # Call Report with cleanly separated arguments
-            # The first argument to Report is where the HTML file (out_filename) will be saved.
-            robj = Report(
-                str(ncdlmuse_derivatives_dir), # Directory to save the main HTML report
-                run_uuid,
-                **report_named_config_args,
-                **bids_entity_filters_and_settings
-            )
-
-            robj.generate_report()
-            config.loggers.cli.info(
-                f"Successfully generated report for {subject_label_with_prefix} at "
-                f"{final_html_path}"
-            )
+            try:      
+                # Create a subclass of Report that handles the BIDS layout properly
+                class SafeReport(Report):
+                    def __init__(self, out_dir, subject_id, **kwargs):
+                        # Store layout separately, not letting it pass to SQL queries
+                        self._safe_layout = kwargs.pop('layout', None)
+                        super().__init__(out_dir, subject_id, **kwargs)
+                    
+                    # Override any methods that might use layout in SQLAlchemy queries
+                    def index(self, settings=None):
+                        # Make layout available during index operation
+                        if hasattr(self, '_safe_layout') and self._safe_layout is not None:
+                            self.layout = self._safe_layout
+                        return super().index(settings)
+                
+                # Now create the safe report instance with layout
+                report_named_config_args['layout'] = layout  # Put layout back in args
+                
+                robj = SafeReport(
+                    str(ncdlmuse_derivatives_dir),  # Directory to save the main HTML report
+                    run_uuid,
+                    **report_named_config_args,
+                    **bids_entity_filters_and_settings
+                )
+                
+                config.loggers.cli.info("Report object created with custom SafeReport class")
+                
+                robj.generate_report()
+                config.loggers.cli.info(
+                    f"Successfully generated report for {subject_label_with_prefix} at "
+                    f"{final_html_path}"
+                )
+            except Exception as e:
+                # Handle Report-specific exceptions
+                err_msg = f"Report generation failed for {subject_label_with_prefix}: {e}"
+                config.loggers.cli.error(err_msg, exc_info=True) # Log full traceback
+                report_errors.append(subject_label_with_prefix)
 
         except Exception as e:
             err_msg = f"Report generation failed for {subject_label_with_prefix}: {e}"
