@@ -62,6 +62,11 @@ def generate_reports(
         subject_list = [subject_list]
 
     for subject_label_with_prefix in subject_list: # e.g., "sub-01"
+        # Ensure subject_label_with_prefix starts with 'sub-'
+        if not subject_label_with_prefix.startswith('sub-'):
+            subject_label_with_prefix = f'sub-{subject_label_with_prefix}'
+            config.loggers.cli.info(f"Added 'sub-' prefix: {subject_label_with_prefix}")
+            
         subject_id_for_report = subject_label_with_prefix.lstrip('sub-') # "01"
 
         # Determine the bootstrap file to use
@@ -81,6 +86,7 @@ def generate_reports(
             
         # Define the main HTML report filename for this subject
         # Reports are saved in the ncdlmuse_derivatives, e.g. <ncdlmuse_derivatives>/sub-01.html
+        # Make sure to keep the "sub-" prefix in the filename
         out_html_filename = f'{subject_label_with_prefix}.html'
         final_html_path = ncdlmuse_derivatives_dir / out_html_filename
 
@@ -132,6 +138,14 @@ def generate_reports(
                     figures_ds_desc_path.parent.mkdir(parents=True, exist_ok=True)
                     with figures_ds_desc_path.open('w') as f:
                         json.dump(ds_desc_content, f, indent=2)
+                        
+                # Log the figures that are available
+                config.loggers.cli.info(f"Figures directory: {subject_figures_dir}")
+                if subject_figures_dir.exists():
+                    figure_files = list(subject_figures_dir.glob("**/*.svg"))
+                    config.loggers.cli.info(f"Found {len(figure_files)} figure files")
+                    for fig in figure_files[:5]:  # Log first 5 figures to help with debugging
+                        config.loggers.cli.info(f"Figure: {fig.relative_to(subject_figures_dir)}")
             
             # Prepare NAMED configuration arguments for nireports.Report
             report_named_config_args = {
