@@ -196,7 +196,24 @@ def generate_reports(
                     def __init__(self, out_dir, subject_id, **kwargs):
                         # Store layout separately, not letting it pass to SQL queries
                         self._safe_layout = kwargs.pop('layout', None)
+                        
+                        # Store the output directory and subject ID for later use
+                        self._output_dir = out_dir
+                        self._subject_id = subject_id
+                        
                         super().__init__(out_dir, subject_id, **kwargs)
+                        
+                        # Debug info about the Report object attributes
+                        config.loggers.cli.info(f"SafeReport initialized with subject_id: {subject_id}")
+                        config.loggers.cli.info(f"Output dir: {out_dir}")
+                        config.loggers.cli.info(f"Available attributes: {dir(self)}")
+                        
+                        if hasattr(self, 'out_path'):
+                            config.loggers.cli.info(f"out_path: {self.out_path}")
+                        if hasattr(self, 'subject'):
+                            config.loggers.cli.info(f"subject: {self.subject}")
+                        if hasattr(self, 'reportlets_dir'):
+                            config.loggers.cli.info(f"reportlets_dir: {self.reportlets_dir}")
                     
                     # Override any methods that might use layout in SQLAlchemy queries
                     def index(self, settings=None):
@@ -213,81 +230,128 @@ def generate_reports(
                     # Override to directly add figures to the report
                     def _register_figures(self, svg_files, html_files):
                         """Ensure all figures are registered and available for the report."""
-                        from nireports.assembler.elements import SVGFigure
-                        
-                        # Initialize figures section if needed
-                        if not hasattr(self, 'sections'):
-                            self.sections = []
-                        
-                        # Create a figures section to hold all SVGs
-                        figures_section = {
-                            'name': 'NCDLMUSE Figures',
-                            'reportlets': []
-                        }
-                        
-                        # Register the figures directly
-                        for svg_file in svg_files:
-                            # Extract subject, task, desc, etc. from filename 
-                            filename = svg_file.name
-                            components = filename.split('_')
+                        try:
+                            from nireports.assembler.elements import SVGFigure
                             
-                            # Create a simple ID for the SVG
-                            svg_id = filename.replace('.svg', '').replace('-', '_').replace('.', '_')
+                            # Initialize figures section if needed
+                            if not hasattr(self, 'sections'):
+                                self.sections = []
                             
-                            # Extract description from filename if available
-                            desc = next((comp.replace('desc-', '') for comp in components if comp.startswith('desc-')), None)
-                            if not desc:
-                                desc = "Visualization"
+                            # Create a figures section to hold all SVGs
+                            figures_section = {
+                                'name': 'NCDLMUSE Figures',
+                                'reportlets': []
+                            }
                             
-                            # Create a title
-                            title = f"Figure: {desc}"
-                            
-                            # Load SVG content directly
-                            try:
-                                with open(svg_file, 'r') as f:
-                                    svg_content = f.read()
+                            # Register the figures directly
+                            for svg_file in svg_files:
+                                # Extract subject, task, desc, etc. from filename 
+                                filename = svg_file.name
+                                components = filename.split('_')
                                 
-                                # Create a reportlet dictionary
-                                reportlet = {
-                                    'name': title,
-                                    'file_id': svg_id,
-                                    'description': f"NCDLMUSE {desc}",
-                                    'raw_content': svg_content
-                                }
+                                # Create a simple ID for the SVG
+                                svg_id = filename.replace('.svg', '').replace('-', '_').replace('.', '_')
                                 
-                                # Add to the figures section
-                                figures_section['reportlets'].append(reportlet)
-                                config.loggers.cli.info(f"Added SVG to figures section: {title}")
-                            except Exception as e:
-                                config.loggers.cli.error(f"Error loading SVG {svg_file}: {e}")
-                        
-                        # Add the figures section to the report
-                        if figures_section['reportlets']:
-                            self.sections.append(figures_section)
-                            config.loggers.cli.info(f"Added figures section with {len(figures_section['reportlets'])} reportlets")
+                                # Extract description from filename if available
+                                desc = next((comp.replace('desc-', '') for comp in components if comp.startswith('desc-')), None)
+                                if not desc:
+                                    desc = "Visualization"
+                                
+                                # Create a title
+                                title = f"Figure: {desc}"
+                                
+                                # Load SVG content directly
+                                try:
+                                    with open(svg_file, 'r') as f:
+                                        svg_content = f.read()
+                                    
+                                    # Create a reportlet dictionary
+                                    reportlet = {
+                                        'name': title,
+                                        'file_id': svg_id,
+                                        'description': f"NCDLMUSE {desc}",
+                                        'raw_content': svg_content
+                                    }
+                                    
+                                    # Add to the figures section
+                                    figures_section['reportlets'].append(reportlet)
+                                    config.loggers.cli.info(f"Added SVG to figures section: {title}")
+                                except Exception as e:
+                                    config.loggers.cli.error(f"Error loading SVG {svg_file}: {e}")
+                            
+                            # Add the figures section to the report
+                            if figures_section['reportlets']:
+                                self.sections.append(figures_section)
+                                config.loggers.cli.info(f"Added figures section with {len(figures_section['reportlets'])} reportlets")
+                        except Exception as e:
+                            config.loggers.cli.error(f"Error in _register_figures: {e}", exc_info=True)
                     
                     def generate_report(self):
                         """Generate the report with figures properly included."""
                         config.loggers.cli.info("Starting custom report generation with figure embedding")
                         
-                        # First, find all SVG files in the figures directory
-                        subject_figures_dir = Path(self.out_dir) / f"sub-{self.subject_id}" / "figures"
-                        if subject_figures_dir.exists():
-                            svg_files = list(subject_figures_dir.glob("**/*.svg"))
-                            html_files = list(subject_figures_dir.glob("**/*.html"))
-                            config.loggers.cli.info(f"Found {len(svg_files)} SVG files and {len(html_files)} HTML files to include")
-                            
-                            # Process and register these files
-                            self._register_figures(svg_files, html_files)
+                        # Debug information about attributes
+                        config.loggers.cli.info(f"Available attributes in generate_report: {dir(self)}")
                         
-                        # Custom HTML generation that ensures figures are embedded
                         try:
+                            # First, determine the figures directory
+                            # Try multiple approaches to find the path
+                            subject_figures_dir = None
+                            
+                            # Get the subject ID, either from our custom attribute or from Report's attribute
+                            subject_id = getattr(self, '_subject_id', None) or getattr(self, 'subject', None)
+                            if not subject_id:
+                                config.loggers.cli.warning("Subject ID not found, using 'unknown'")
+                                subject_id = 'unknown'
+                            
+                            config.loggers.cli.info(f"Using subject ID: {subject_id}")
+                            
+                            # Approach 1: Use out_path if available
+                            if hasattr(self, 'out_path'):
+                                subject_figures_dir = Path(self.out_path.parent) / f"sub-{subject_id}" / "figures"
+                                config.loggers.cli.info(f"Approach 1 - Looking for figures in: {subject_figures_dir}")
+                            
+                            # Approach 2: Use reportlets_dir if available
+                            if hasattr(self, 'reportlets_dir') and (not subject_figures_dir or not subject_figures_dir.exists()):
+                                subject_figures_dir = Path(self.reportlets_dir) / f"sub-{subject_id}" / "figures"
+                                config.loggers.cli.info(f"Approach 2 - Looking for figures in: {subject_figures_dir}")
+                            
+                            # Approach 3: Use first argument of constructor (output_dir)
+                            if (not subject_figures_dir or not subject_figures_dir.exists()) and hasattr(self, '_output_dir'):
+                                subject_figures_dir = Path(self._output_dir) / f"sub-{subject_id}" / "figures"
+                                config.loggers.cli.info(f"Approach 3 - Looking for figures in: {subject_figures_dir}")
+                                
+                            # If no figures dir found, try to find SVGs in any known directory
+                            svg_files = []
+                            html_files = []
+                            
+                            if subject_figures_dir and subject_figures_dir.exists():
+                                config.loggers.cli.info(f"Found figures directory: {subject_figures_dir}")
+                                svg_files = list(subject_figures_dir.glob("**/*.svg"))
+                                html_files = list(subject_figures_dir.glob("**/*.html"))
+                                config.loggers.cli.info(f"Found {len(svg_files)} SVG files and {len(html_files)} HTML files to include")
+                                
+                                # Process and register these files
+                                self._register_figures(svg_files, html_files)
+                            else:
+                                config.loggers.cli.warning("Could not find figures directory")
+                            
+                            # Determine the output HTML file
+                            html_file = None
+                            if hasattr(self, 'out_path'):
+                                html_file = self.out_path
+                            elif hasattr(self, '_output_dir') and hasattr(self, 'out_filename'):
+                                html_file = Path(self._output_dir) / self.out_filename
+                            
+                            if html_file:
+                                config.loggers.cli.info(f"Output HTML file: {html_file}")
+                            
+                            # Custom HTML generation that ensures figures are embedded
                             # Run the standard report generation process
                             super().generate_report()
                             
                             # After generation, check if the HTML has figures content
-                            html_file = Path(self.out_dir) / f"{self.out_filename}"
-                            if html_file.exists():
+                            if html_file and html_file.exists():
                                 with open(html_file, 'r') as f:
                                     html_content = f.read()
                                 
