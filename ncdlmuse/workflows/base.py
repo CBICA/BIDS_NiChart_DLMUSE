@@ -661,43 +661,30 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     current_reportlets_dir = Path(reportlets_dir)
     current_reportlets_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine session entity for filenames, using _current_t1w_entities passed to this wf
-    session_entity_str = \
-        f'_ses-{_current_t1w_entities["session"]}' if _current_t1w_entities.get('session') else ''
-
-    # Define base filenames for reportlets, using _current_t1w_entities for subject and session
-    brain_mask_report_filename = (
-        f'sub-{_current_t1w_entities["subject"]}{session_entity_str}_'
-        f'desc-brainMask_T1w.svg'
-    )
-    dlmuse_seg_report_filename = (
-        f'sub-{_current_t1w_entities["subject"]}{session_entity_str}_'
-        f'desc-dlmuseSegmentation_T1w.svg'
-    )
-
     # --- Instead of using reportlets_dir/sub/ses/anat, use derivatives_dir/sub/figures ---
     figures_dir = Path(derivatives_dir) / f'sub-{_current_t1w_entities["subject"]}' / 'figures'
     figures_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build the base filename with all entities from the original T1w
+    base_entities = {k: v for k, v in _current_t1w_entities.items() 
+                    if k not in ['datatype', 'suffix', 'extension']}
+    base_filename = '_'.join(f'{k}-{v}' for k, v in sorted(base_entities.items()))
 
     # Reportlet for Brain Mask
     plot_brain_mask = pe.Node(
         ROIsPlot(
             colors=['#FF0000'],  # Red contour
             levels=[0.5],
-            out_report=str(figures_dir / brain_mask_report_filename)
+            out_report=str(figures_dir / f'{base_filename}_desc-brainMask_T1w.svg')
         ),
         name='plot_brain_mask',
         mem_gb=0.2 # Slightly more memory for plotting
     )
 
     # Reportlet for DLMUSE Segmentation
-    # For multi-label segmentations, ROIsPlot might pick one color or need specific config.
-    # If colors are important and specific, you might need to generate reportlets
-    # for key ROIs or use a different plotting tool/custom function.
-    # For now, let ROIsPlot decide colors.
     plot_dlmuse_seg = pe.Node(
         ROIsPlot(
-            out_report=str(figures_dir / dlmuse_seg_report_filename)
+            out_report=str(figures_dir / f'{base_filename}_desc-dlmuseSegmentation_T1w.svg')
         ),
         name='plot_dlmuse_seg',
         mem_gb=0.2 # Slightly more memory for plotting
@@ -732,7 +719,9 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             base_directory=str(derivatives_dir),
             desc='summary',
             datatype='figures',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+            suffix='T1w',
+            extension='.html',
+            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
         ),
         name='ds_report_summary',
         run_without_submitting=True,
@@ -740,7 +729,6 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     workflow.connect([
         (bidssrc, subject_summary_node, [(('t1w', _make_list), 't1w')]),
         (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
-        (bidssrc, ds_report_summary, [(('t1w', _select_first_from_list), 'source_file')])
     ])
 
     # 2. Execution Provenance Report (About this NCDLMUSE run)
@@ -759,14 +747,15 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             base_directory=str(derivatives_dir),
             desc='about',
             datatype='figures',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+            suffix='T1w',
+            extension='.html',
+            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
         ),
         name='ds_report_about',
         run_without_submitting=True,
     )
     workflow.connect([
         (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
-        (bidssrc, ds_report_about, [(('t1w', _select_first_from_list), 'source_file')])
     ])
 
     # 3. Error Reportlet (Checks DLMUSE outputs)
@@ -796,14 +785,14 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             base_directory=str(derivatives_dir),
             desc='processingErrors',
             datatype='figures',
+            suffix='T1w',
             extension='.html',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
         ),
         name='ds_error_report',
         run_without_submitting=True,
     )
     workflow.connect([
-        (bidssrc, ds_error_report, [(('t1w', _select_first_from_list), 'source_file')]),
         (error_report_node, ds_error_report, [('out_report', 'in_file')]),
     ])
 
@@ -820,15 +809,14 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             base_directory=str(derivatives_dir),
             desc='workflowProvenance',
             datatype='figures',
+            suffix='T1w',
             extension='.html',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
         ),
         name='ds_workflow_provenance_report',
         run_without_submitting=True,
     )
     workflow.connect([
-        (bidssrc, ds_workflow_provenance_report, 
-         [(('t1w', _select_first_from_list), 'source_file')]),
         (workflow_provenance_report_node, ds_workflow_provenance_report,
          [('out_report', 'in_file')]),
     ])
@@ -846,14 +834,14 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             base_directory=str(derivatives_dir),
             desc='segmentationVolumes',
             datatype='figures',
+            suffix='T1w',
             extension='.html',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
         ),
         name='ds_segmentation_qc_report',
         run_without_submitting=True,
     )
     workflow.connect([
-        (bidssrc, ds_segmentation_qc_report, [(('t1w', _select_first_from_list), 'source_file')]),
         (segmentation_qc_report_node, ds_segmentation_qc_report, [('out_report', 'in_file')]),
     ])
     # === END HTML Report Generation ===

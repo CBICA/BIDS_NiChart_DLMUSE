@@ -104,35 +104,24 @@ def main():
                 validate=not config.execution.skip_bids_validation,
                 ignore=ignore_patterns,
             )
-            # Define reportlets path for BIDSLayout
-            reportlets_path_for_layout = Path(config.execution.work_dir) / 'reportlets'
-            # Ensure reportlets directory exists
-            reportlets_path_for_layout.mkdir(parents=True, exist_ok=True)
-            # Ensure dataset_description.json exists in reportlets directory
-            desc_file = reportlets_path_for_layout / "dataset_description.json"
-            if not desc_file.exists():
-                desc_content = {
-                    "Name": "NCDLMUSE Reportlets",
-                    "BIDSVersion": "1.0.2", # Or a version appropriate for nireports
-                    "GeneratedBy": [{"Name": "ncdlmuse"}]
-                }
-                with open(desc_file, 'w') as f:
-                    json.dump(desc_content, f, indent=2)
 
+            # Initialize layout with both BIDS and derivatives directories
             layout = BIDSLayout(
                 root=str(config.execution.bids_dir),
-                database_path=None, # Use in-memory DB for reports-only
+                database_path=None,  # Use in-memory DB for reports-only
                 indexer=bids_indexer,
                 reset_database=True,
-                derivatives=str(reportlets_path_for_layout) # Index reportlets dir
+                derivatives=str(config.execution.ncdlmuse_dir)  # Include derivatives directory
             )
-            config.execution.layout = layout # Store layout in config
+            config.execution.layout = layout
+
             # --- DEBUG: Check layout object before generating reports --- #
             if isinstance(layout, BIDSLayout):
                 config.loggers.cli.info(f"Layout object created successfully. Root: {layout.root}")
+                config.loggers.cli.info(f"Derivatives directory: {config.execution.ncdlmuse_dir}")
             else:
                 config.loggers.cli.error(f"Layout object is invalid or None: {layout}")
-                return 1 # Exit if layout is bad
+                return 1  # Exit if layout is bad
             # end debug
         except Exception as e:
             config.loggers.cli.critical(f"Could not initialize BIDSLayout: {e}")

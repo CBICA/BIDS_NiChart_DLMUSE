@@ -51,9 +51,9 @@ def generate_reports(
         return 1
 
     output_dir_path = Path(output_dir).absolute()
-    reportlets_dir = None
-    if work_dir is not None:
-        reportlets_dir = Path(work_dir) / 'reportlets'
+    
+    # The reportlets are in the derivatives directory under figures/
+    reportlets_dir = output_dir_path
 
     if isinstance(subject_list, str):
         subject_list = [subject_list]
@@ -91,8 +91,7 @@ def generate_reports(
             final_html_path = output_dir_path / html_report
             config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
             config.loggers.cli.info(f'Main HTML will be: {final_html_path}')
-            if reportlets_dir:
-                config.loggers.cli.info(f'Reportlets base dir for nireports: {reportlets_dir}')
+            config.loggers.cli.info(f'Reportlets base dir for nireports: {reportlets_dir}')
             if isinstance(bootstrap_file, (str, Path)):
                 config.loggers.cli.info(f'Bootstrap file for nireports: {bootstrap_file}')
 
@@ -102,7 +101,7 @@ def generate_reports(
                 run_uuid,                # 2. Positional: run_uuid
                 bootstrap_file=str(bootstrap_file),
                 out_filename=html_report,
-                reportlets_dir=str(reportlets_dir) if reportlets_dir else None,
+                reportlets_dir=str(reportlets_dir),  # Use derivatives dir as reportlets dir
                 layout=layout,
                 subject=subject_id_for_report,
                 output_dir=str(output_dir_path),
@@ -149,7 +148,7 @@ def generate_reports(
                         run_uuid,                # 2. Positional: run_uuid
                         bootstrap_file=str(bootstrap_file),
                         out_filename=html_report,
-                        reportlets_dir=str(reportlets_dir) if reportlets_dir else None,
+                        reportlets_dir=str(reportlets_dir),  # Use derivatives dir as reportlets dir
                         layout=layout,
                         subject=subject_id_for_report,
                         session=session_label,
