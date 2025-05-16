@@ -11,7 +11,10 @@ import os
 # utils/bids.py
 # """BIDS utilities for NCDLMUSE."""
 import re
+import shutil
 from pathlib import Path
+
+from ncdlmuse import data as ncdlmuse_data_module
 
 LOGGER = logging.getLogger('ncdlmuse.utils.bids')
 
@@ -187,16 +190,21 @@ def write_derivative_description(bids_dir, deriv_dir):
 
     bids_dir = Path(bids_dir)
     deriv_dir = Path(deriv_dir)
+    ncdlmuse_config_filename = 'ncdlmuse_bids_config.json'
     desc = {
         'Name': 'BIDS NiChart DLMUSE: BIDS-Apps wrapper for NiChart DLMUSE',
         'BIDSVersion': '1.10.0',
-        'PipelineDescription': {
-            'Name': 'BIDS_NiChart_DLMUSE',
-            'Version': __version__,
-            'CodeURL': DOWNLOAD_URL,
-        },
+        'DatasetType': 'derivative',
         'CodeURL': __url__,
         'HowToAcknowledge': 'Please cite our paper doi: 10.1016/j.neuroimage.2015.11.073',
+        'GeneratedBy': [
+            {
+                'Name': 'BIDS_NiChart_DLMUSE',
+                'Version': __version__,
+                'CodeURL': DOWNLOAD_URL,
+                'Configuration': ncdlmuse_config_filename
+            }
+        ]
     }
 
     # Keys that can only be set by environment
@@ -223,6 +231,53 @@ def write_derivative_description(bids_dir, deriv_dir):
 
     if 'License' in orig_desc:
         desc['License'] = orig_desc['License']
+
+    # Copy the ncdlmuse_bids_config.json to the derivative directory
+    try:
+        # Assuming ncdlmuse_data_module.load() returns a Path to the file
+        # and ncdlmuse_config_filename is just the basename.
+        # Adjust if load() expects just the basename or full name.
+        # Ensure your data.load mechanism can find 'ncdlmuse_bids_config.json'
+        # This might require `ncdlmuse_data_module.load('ncdlmuse_bids_config.json')`
+        # or similar depending on how `ncdlmuse.data.load` is implemented.
+        # For this example, let's assume it gives a Path to the config file.
+        # It's safer to use a more direct way to get the package data path if available.
+        # Using importlib.resources is generally preferred for package data.
+        source_config_path = None
+        if hasattr(ncdlmuse_data_module, 'load') and callable(ncdlmuse_data_module.load):
+            # Attempt to load it as if it's a resource like reports-spec.yml
+            try:
+                source_config_path = ncdlmuse_data_module.load(ncdlmuse_config_filename)
+            except Exception as e:
+                LOGGER.warning(
+                    f"Failed to locate '{ncdlmuse_config_filename}' using "
+                    f"ncdlmuse.data.load(): {e}. Trying direct path construction."
+                )
+
+        if source_config_path is None or not Path(source_config_path).exists():
+            # Fallback: try to find it relative to the ncdlmuse.data module file
+            # This assumes ncdlmuse_bids_config.json is in the same directory as data/__init__.py
+            # or that ncdlmuse_data_module.__path__ points to the data directory.
+            if hasattr(ncdlmuse_data_module, '__path__') and ncdlmuse_data_module.__path__:
+                data_dir = Path(ncdlmuse_data_module.__path__[0])
+                source_config_path = data_dir / ncdlmuse_config_filename
+            elif hasattr(ncdlmuse_data_module, '__file__'): # If data is a single file
+                data_dir = Path(ncdlmuse_data_module.__file__).parent
+                source_config_path = data_dir / ncdlmuse_config_filename
+
+        if source_config_path and Path(source_config_path).exists():
+            destination_config_path = deriv_dir / ncdlmuse_config_filename
+            shutil.copyfile(source_config_path, destination_config_path)
+            LOGGER.info(f"Copied '{ncdlmuse_config_filename}' to {destination_config_path}")
+        else:
+            LOGGER.error(
+                f"Could not find '{ncdlmuse_config_filename}' in ncdlmuse.data. "
+                "Reports may not generate correctly if pybids cannot parse derivatives."
+            )
+    except Exception as e:
+        LOGGER.error(
+            f"Error copying '{ncdlmuse_config_filename}' to derivative directory: {e}"
+        )
 
     with (deriv_dir / 'dataset_description.json').open('w') as fobj:
         json.dump(desc, fobj, indent=4)
