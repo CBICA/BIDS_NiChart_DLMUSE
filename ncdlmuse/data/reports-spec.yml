@@ -24,13 +24,6 @@ sections:
         desc: dlmuseSegmentation
         extension: .svg
 
-    - title: Segmentation Volume Summary
-      description: "Summary of key volumes (in mm&sup3;) derived from the DLMUSE segmentation."
-      bids:
-        datatype: figures
-        desc: segmentationVolumes # Matches the desc in the datasink
-        extension: [.html]
-
 - name: Processing Details
   reportlets:
     - title: Workflow Provenance

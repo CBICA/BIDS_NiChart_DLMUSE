@@ -171,7 +171,7 @@ def main():
             if not desc_file.exists():
                 desc_content = {
                     "Name": "NCDLMUSE Reportlets",
-                    "BIDSVersion": "1.0.2", # Or a version appropriate for nireports
+                    "BIDSVersion": "1.10.0", # Or a version appropriate for nireports
                     "GeneratedBy": [{"Name": "ncdlmuse"}]
                 }
                 with open(desc_file, 'w') as f:
@@ -339,6 +339,7 @@ def main():
             run_uuid=config.execution.run_uuid,
             work_dir=config.execution.work_dir,
             layout=config.execution.layout,
+            bootstrap_file=data.load('reports-spec.yml'),  # Explicitly provide bootstrap file
         )
         # Update overall exit code if report generation failed
         if exit_code != 0:

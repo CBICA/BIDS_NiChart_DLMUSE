@@ -708,11 +708,24 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     # 1. Subject Summary Report (Primary HTML Summary)
     subject_summary_node = pe.Node(
         SubjectSummary(
-            subject_id=_current_t1w_entities.get('subject', 'UNKNOWN')
-        ), # Use subject from the specific T1w entities
+            subject_id=_current_t1w_entities.get('subject', 'UNKNOWN'),
+            session_id=_current_t1w_entities.get('session'),
+            acquisition_id=_current_t1w_entities.get('acquisition'),
+        ),
         name='subject_summary_node',
         run_without_submitting=True
     )
+
+    # Connect inputs to subject summary
+    workflow.connect([
+        (bidssrc, subject_summary_node, [(('t1w', _select_first_from_list), 't1w_file')]),
+        (dlmuse_node, subject_summary_node, [
+            ('dlicv_mask', 'brain_mask_file'),
+            ('dlmuse_segmentation', 'dlmuse_seg_file')
+        ]),
+    ])
+
+    # Create DerivativesDataSink nodes for all HTML reports
     ds_report_summary = pe.Node(
         DerivativesDataSink(
             base_directory=str(derivatives_dir),
@@ -725,10 +738,6 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         name='ds_report_summary',
         run_without_submitting=True,
     )
-    workflow.connect([
-        (bidssrc, subject_summary_node, [(('t1w', _make_list), 't1w')]),
-        (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
-    ])
 
     # 2. Execution Provenance Report (About this NCDLMUSE run)
     exec_provenance_node = pe.Node(
@@ -741,6 +750,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         name='execution_provenance_node',
         run_without_submitting=True
     )
+
     ds_report_about = pe.Node(
         DerivativesDataSink(
             base_directory=str(derivatives_dir),
@@ -753,31 +763,22 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         name='ds_report_about',
         run_without_submitting=True,
     )
-    workflow.connect([
-        (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
-    ])
 
     # 3. Error Reportlet (Checks DLMUSE outputs)
     check_dlmuse_outputs_node = pe.Node(
         niu.Function(
             input_names=['segmentation_file', 'volumes_csv_file'],
             output_names=['error_messages_list'],
-            function=_check_dlmuse_outputs # Defined below
+            function=_check_dlmuse_outputs
         ),
         name='check_dlmuse_outputs_node',
         run_without_submitting=True
     )
-    workflow.connect(dlmuse_node, 'dlmuse_segmentation',
-                     check_dlmuse_outputs_node, 'segmentation_file')
-    workflow.connect(dlmuse_node, 'dlmuse_volumes',
-                     check_dlmuse_outputs_node, 'volumes_csv_file')
 
     error_report_node = pe.Node(
         ErrorReportlet(),
         name='error_report_node'
     )
-    workflow.connect(check_dlmuse_outputs_node, 'error_messages_list',
-                     error_report_node, 'error_messages')
 
     ds_error_report = pe.Node(
         DerivativesDataSink(
@@ -791,17 +792,12 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         name='ds_error_report',
         run_without_submitting=True,
     )
-    workflow.connect([
-        (error_report_node, ds_error_report, [('out_report', 'in_file')]),
-    ])
 
     # 4. Workflow Provenance Reportlet (Software versions from JSON)
     workflow_provenance_report_node = pe.Node(
         WorkflowProvenanceReportlet(),
         name='workflow_provenance_report_node'
     )
-    workflow.connect(create_volumes_json_node, 'output_json_path',
-                     workflow_provenance_report_node, 'provenance_json_file')
 
     ds_workflow_provenance_report = pe.Node(
         DerivativesDataSink(
@@ -815,52 +811,28 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         name='ds_workflow_provenance_report',
         run_without_submitting=True,
     )
+
+    # Connect all report nodes
     workflow.connect([
-        (workflow_provenance_report_node, ds_workflow_provenance_report,
-         [('out_report', 'in_file')]),
+        # Subject Summary Report
+        (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
+        
+        # Execution Provenance Report
+        (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
+        
+        # Error Report
+        (dlmuse_node, check_dlmuse_outputs_node, [
+            ('dlmuse_segmentation', 'segmentation_file'),
+            ('dlmuse_volumes', 'volumes_csv_file')
+        ]),
+        (check_dlmuse_outputs_node, error_report_node, [('error_messages_list', 'error_messages')]),
+        (error_report_node, ds_error_report, [('out_report', 'in_file')]),
+        
+        # Workflow Provenance Report
+        (create_volumes_json_node, workflow_provenance_report_node, [('output_json_path', 'provenance_json_file')]),
+        (workflow_provenance_report_node, ds_workflow_provenance_report, [('out_report', 'in_file')]),
     ])
 
-    # 5. Segmentation QC Reportlet (Volumes from JSON)
-    segmentation_qc_report_node = pe.Node(
-        SegmentationQCSummary(),
-        name='segmentation_qc_report_node'
-    )
-    workflow.connect(create_volumes_json_node, 'output_json_path',
-                     segmentation_qc_report_node, 'segmentation_qc_json_file')
-
-    ds_segmentation_qc_report = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(derivatives_dir),
-            desc='segmentationVolumes',
-            datatype='figures',
-            suffix='T1w',
-            extension='.html',
-            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
-        ),
-        name='ds_segmentation_qc_report',
-        run_without_submitting=True,
-    )
-    workflow.connect([
-        (segmentation_qc_report_node, ds_segmentation_qc_report, [('out_report', 'in_file')]),
-    ])
-
-    # Also generate the main subject-level HTML report
-    ds_main_report = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(derivatives_dir),
-            desc='summary',
-            datatype='figures',
-            suffix='T1w',
-            extension='.html',
-            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
-            dismiss_entities=['session', 'acquisition'],  # Ensure this goes to subject level
-        ),
-        name='ds_main_report',
-        run_without_submitting=True,
-    )
-    workflow.connect([
-        (subject_summary_node, ds_main_report, [('out_report', 'in_file')]),
-    ])
     # === END HTML Report Generation ===
 
     return clean_datasinks(workflow) # Apply clean_datasinks

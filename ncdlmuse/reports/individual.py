@@ -52,8 +52,10 @@ def generate_reports(
 
     output_dir_path = Path(output_dir).absolute()
     
-    # The reportlets are in the derivatives directory under figures/
-    reportlets_dir = output_dir_path
+    # The reportlets are in the work directory under reportlets/
+    reportlets_dir = None
+    if work_dir is not None:
+        reportlets_dir = Path(work_dir) / 'reportlets'
 
     if isinstance(subject_list, str):
         subject_list = [subject_list]
@@ -76,23 +78,24 @@ def generate_reports(
 
         if bootstrap_file is not None:
             # If a config file is specified, we do not override it
-            html_report = f'{subject_label_with_prefix}.html'
+            html_report = 'report.html'
         elif n_ses <= config.execution.aggr_ses_reports:
             # If there are only a few sessions for this subject,
             # we aggregate them in a single visual report.
             bootstrap_file = data.load('reports-spec.yml')
-            html_report = f'{subject_label_with_prefix}.html'
+            html_report = 'report.html'
         else:
-            # Beyond a threshold, we separate the reports by session
+            # Beyond a threshold, we separate the reports
             bootstrap_file = data.load('reports-spec.yml')
-            html_report = f'{subject_label_with_prefix}_anat.html'
+            html_report = f'sub-{subject_id_for_report}.html'
 
         try:
             final_html_path = output_dir_path / html_report
             config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
-            config.loggers.cli.info(f'Main HTML will be: {final_html_path}')
-            config.loggers.cli.info(f'Reportlets base dir for nireports: {reportlets_dir}')
-            if isinstance(bootstrap_file, (str, Path)):
+            config.loggers.cli.info(f'HTML will be: {final_html_path}')
+            if reportlets_dir:
+                config.loggers.cli.info(f'Reportlets base dir for nireports: {reportlets_dir}')
+            if isinstance(bootstrap_file, str | Path):
                 config.loggers.cli.info(f'Bootstrap file for nireports: {bootstrap_file}')
 
             # Generate the report
@@ -101,7 +104,7 @@ def generate_reports(
                 run_uuid,                # 2. Positional: run_uuid
                 bootstrap_file=str(bootstrap_file),
                 out_filename=html_report,
-                reportlets_dir=str(reportlets_dir),  # Use derivatives dir as reportlets dir
+                reportlets_dir=str(reportlets_dir) if reportlets_dir else None,
                 layout=layout,
                 subject=subject_id_for_report,
                 output_dir=str(output_dir_path),
@@ -133,7 +136,7 @@ def generate_reports(
 
             for session_label in session_list:
                 bootstrap_file = data.load('reports-spec.yml')
-                html_report = f'{subject_label_with_prefix}_ses-{session_label}.html'
+                html_report = f'sub-{subject_id_for_report}_ses-{session_label}.html'
 
                 try:
                     final_html_path = output_dir_path / html_report
@@ -148,7 +151,7 @@ def generate_reports(
                         run_uuid,                # 2. Positional: run_uuid
                         bootstrap_file=str(bootstrap_file),
                         out_filename=html_report,
-                        reportlets_dir=str(reportlets_dir),  # Use derivatives dir as reportlets dir
+                        reportlets_dir=str(reportlets_dir) if reportlets_dir else None,
                         layout=layout,
                         subject=subject_id_for_report,
                         session=session_label,
