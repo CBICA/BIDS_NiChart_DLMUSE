@@ -83,7 +83,7 @@ def generate_reports(
     else: # No config attribute, or not a dict, assume it needs invalid_filters='allow'
         layout_needs_recreation = True
         config.loggers.cli.warning(
-            "The BIDSLayout provided to generate_reports does not have a standard config attribute
+            "The BIDSLayout provided to generate_reports does not have a standard config attribute"
             " or it is not a dict. Attempting to re-create it with invalid_filters='allow'."
         )
 
