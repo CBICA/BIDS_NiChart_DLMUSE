@@ -306,22 +306,44 @@ def generate_reports(
                             
                             config.loggers.cli.info(f"Using subject ID: {subject_id}")
                             
-                            # Approach 1: Use out_path if available
-                            if hasattr(self, 'out_path'):
-                                subject_figures_dir = Path(self.out_path.parent) / f"sub-{subject_id}" / "figures"
+                            # Approach 1: Direct approach - check standard figures location
+                            if hasattr(self, '_output_dir'):
+                                # First try the standard BIDS location
+                                subject_figures_dir = Path(self._output_dir) / f"sub-{subject_id}" / "figures"
                                 config.loggers.cli.info(f"Approach 1 - Looking for figures in: {subject_figures_dir}")
                             
-                            # Approach 2: Use reportlets_dir if available
-                            if hasattr(self, 'reportlets_dir') and (not subject_figures_dir or not subject_figures_dir.exists()):
-                                subject_figures_dir = Path(self.reportlets_dir) / f"sub-{subject_id}" / "figures"
-                                config.loggers.cli.info(f"Approach 2 - Looking for figures in: {subject_figures_dir}")
-                            
-                            # Approach 3: Use first argument of constructor (output_dir)
+                            # Approach 2: Brute force search for any subdirectories with figures
                             if (not subject_figures_dir or not subject_figures_dir.exists()) and hasattr(self, '_output_dir'):
-                                subject_figures_dir = Path(self._output_dir) / f"sub-{subject_id}" / "figures"
-                                config.loggers.cli.info(f"Approach 3 - Looking for figures in: {subject_figures_dir}")
+                                # Look for any 'sub-*' directory with figures
+                                output_path = Path(self._output_dir)
+                                sub_dirs = list(output_path.glob("sub-*"))
+                                config.loggers.cli.info(f"Found {len(sub_dirs)} 'sub-*' directories")
                                 
-                            # If no figures dir found, try to find SVGs in any known directory
+                                for sub_dir in sub_dirs:
+                                    figures_dir = sub_dir / "figures"
+                                    if figures_dir.exists():
+                                        config.loggers.cli.info(f"Found figures directory: {figures_dir}")
+                                        subject_figures_dir = figures_dir
+                                        break
+                            
+                            # Approach 3: Look for a "sub-" directory whose name starts with the subject ID
+                            if (not subject_figures_dir or not subject_figures_dir.exists()) and hasattr(self, '_output_dir'):
+                                output_path = Path(self._output_dir)
+                                possible_dirs = list(output_path.glob(f"sub-{subject_id}*"))
+                                if possible_dirs:
+                                    for dir_path in possible_dirs:
+                                        figures_dir = dir_path / "figures"
+                                        if figures_dir.exists():
+                                            config.loggers.cli.info(f"Found figures directory for subject {subject_id}: {figures_dir}")
+                                            subject_figures_dir = figures_dir
+                                            break
+                            
+                            # Approach 4: Use reportlets_dir if available
+                            if (not subject_figures_dir or not subject_figures_dir.exists()) and hasattr(self, 'reportlets_dir'):
+                                subject_figures_dir = Path(self.reportlets_dir) / f"sub-{subject_id}" / "figures"
+                                config.loggers.cli.info(f"Approach 4 - Looking for figures in: {subject_figures_dir}")
+                            
+                            # If still no directory found, try a brute force search for any SVG files
                             svg_files = []
                             html_files = []
                             
@@ -330,11 +352,28 @@ def generate_reports(
                                 svg_files = list(subject_figures_dir.glob("**/*.svg"))
                                 html_files = list(subject_figures_dir.glob("**/*.html"))
                                 config.loggers.cli.info(f"Found {len(svg_files)} SVG files and {len(html_files)} HTML files to include")
+                            else:
+                                # Last ditch effort - search the entire output directory for SVG files
+                                if hasattr(self, '_output_dir'):
+                                    output_path = Path(self._output_dir)
+                                    all_svg_files = list(output_path.glob("**/*.svg"))
+                                    config.loggers.cli.info(f"Found {len(all_svg_files)} SVG files across all directories")
+                                    
+                                    # Filter to include only files that seem to be for this subject
+                                    svg_files = [f for f in all_svg_files if f"sub-{subject_id}" in str(f)]
+                                    config.loggers.cli.info(f"After filtering, found {len(svg_files)} SVG files for subject {subject_id}")
+                                
+                                if not svg_files:
+                                    config.loggers.cli.warning("Could not find figures for this subject")
+                            
+                            # If we found SVG files, process and register them
+                            if svg_files:
+                                # List the files we found
+                                for svg in svg_files:
+                                    config.loggers.cli.info(f"Found SVG file: {svg}")
                                 
                                 # Process and register these files
                                 self._register_figures(svg_files, html_files)
-                            else:
-                                config.loggers.cli.warning("Could not find figures directory")
                             
                             # Determine the output HTML file
                             html_file = None
@@ -361,7 +400,11 @@ def generate_reports(
                                     
                                     # Create simple HTML with embedded SVGs
                                     html_content_parts = html_content.split('</body>')
-                                    svg_html = '<div class="container"><h2>NCDLMUSE Figures</h2>'
+                                    svg_html = '''
+                                    <div class="container mt-5">
+                                        <h2 class="mb-4">NCDLMUSE Figures</h2>
+                                        <div class="row">
+                                    '''
                                     
                                     for svg_file in svg_files:
                                         try:
@@ -372,13 +415,44 @@ def generate_reports(
                                             desc = next((comp.replace('desc-', '') for comp in svg_file.name.split('_') 
                                                         if comp.startswith('desc-')), "Visualization")
                                             
-                                            svg_html += f'<div class="card mb-3"><div class="card-header">{desc}</div>'
-                                            svg_html += f'<div class="card-body">{svg_content}</div></div>'
+                                            # Ensure SVG content has proper size attributes
+                                            if 'width=' not in svg_content.lower() and 'height=' not in svg_content.lower():
+                                                svg_content = svg_content.replace('<svg', '<svg width="100%" height="auto"')
+                                            
+                                            # Create a Bootstrap card for each SVG
+                                            svg_html += f'''
+                                            <div class="col-md-6 mb-4">
+                                                <div class="card h-100">
+                                                    <div class="card-header bg-primary text-white">
+                                                        {desc}
+                                                    </div>
+                                                    <div class="card-body d-flex align-items-center justify-content-center">
+                                                        {svg_content}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            '''
                                             
                                         except Exception as e:
                                             config.loggers.cli.error(f"Error embedding SVG {svg_file}: {e}")
                                     
-                                    svg_html += '</div>'
+                                    svg_html += '''
+                                        </div>
+                                    </div>
+                                    
+                                    <script>
+                                        // Ensure SVGs are properly sized
+                                        document.addEventListener('DOMContentLoaded', function() {
+                                            const svgs = document.querySelectorAll('svg');
+                                            svgs.forEach(svg => {
+                                                if (!svg.hasAttribute('width') || !svg.hasAttribute('height')) {
+                                                    svg.setAttribute('width', '100%');
+                                                    svg.setAttribute('height', 'auto');
+                                                }
+                                            });
+                                        });
+                                    </script>
+                                    '''
                                     
                                     # Insert before the closing body tag
                                     if len(html_content_parts) > 1:
@@ -405,9 +479,12 @@ def generate_reports(
                 config.loggers.cli.info(f"Subject ID for report: {subject_id_for_report}")
                 config.loggers.cli.info(f"Output HTML filename: {out_html_filename}")
                 
+                # The second parameter to Report should be the subject ID, not the run_uuid
+                # This is critical for finding the correct figures directory
                 robj = SafeReport(
                     str(ncdlmuse_derivatives_dir),  # Directory to save the main HTML report
-                    run_uuid,
+                    subject_id_for_report,  # Use the actual subject ID instead of run_uuid
+                    run_uuid=run_uuid,  # Pass run_uuid as a keyword argument instead
                     **report_named_config_args,
                     **bids_entity_filters_and_settings
                 )
