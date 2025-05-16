@@ -69,18 +69,71 @@ def generate_reports(
             'BIDSLayout (already including derivatives) is required for report generation.'
         )
         return 1
-    
+
     # Ensure the provided layout has invalid_filters='allow'
     # This is crucial. The layout from cli/run.py must be created with this.
-    # Here we check and warn if not set, as modifying an existing layout's config can be tricky.
-    if not (hasattr(layout, 'config') and isinstance(layout.config, dict) \
-        and layout.config.get('invalid_filters') == 'allow'):
+    layout_needs_recreation = False
+    if hasattr(layout, 'config') and isinstance(layout.config, dict):
+        if layout.config.get('invalid_filters') != 'allow':
+            layout_needs_recreation = True
+            config.loggers.cli.warning(
+                "The BIDSLayout provided to generate_reports does not have invalid_filters='allow'"
+                " set in its config. Attempting to re-create it with this setting."
+            )
+    else: # No config attribute, or not a dict, assume it needs invalid_filters='allow'
+        layout_needs_recreation = True
         config.loggers.cli.warning(
-            "The BIDSLayout provided to generate_reports does not explicitly have "
-            "invalid_filters='allow'. This might lead to errors if reports-spec.yml "
-            "or nireports internals imply non-standard BIDS entities. "
-            "It is recommended to initialize the BIDSLayout with this setting."
+            "The BIDSLayout provided to generate_reports does not have a standard config attribute
+            " or it is not a dict. Attempting to re-create it with invalid_filters='allow'."
         )
+
+    if layout_needs_recreation:
+        try:
+            # Preserve original derivatives and root if possible
+            original_derivatives = layout.derivatives if hasattr(layout, 'derivatives') else None
+            original_root = layout.root if hasattr(layout, 'root') else None
+
+            if original_root is None:
+                config.loggers.cli.error(
+                    'Original layout root is None, cannot re-create layout for report generation.'
+                )
+                return 1 # Cannot proceed without a root
+
+            new_layout_derivatives = {}
+            if isinstance(original_derivatives, dict):
+                new_layout_derivatives = {k: str(v.path) for k, v in original_derivatives.items() \
+                    if hasattr(v, 'path')}
+            elif isinstance(original_derivatives, list):
+                new_layout_derivatives = [str(p) for p in original_derivatives]
+            elif isinstance(original_derivatives, str | Path):
+                new_layout_derivatives = str(original_derivatives)
+            else:
+                 # Fallback if derivatives format is unknown, use output_dir_path
+                 # This might be too simplistic if multiple derivative paths were orig configured.
+                new_layout_derivatives = str(Path(output_dir).absolute())
+                config.loggers.cli.warning(
+                    f"Original layout derivatives format not recognized or empty. Using output_dir"
+                    f" '{new_layout_derivatives}' as derivative for re-created layout."
+                )
+
+
+            layout = BIDSLayout(
+                root=str(original_root),
+                derivatives=new_layout_derivatives,
+                config={'invalid_filters': 'allow'},
+                validate=False, # Keep validation off for performance/flexibility
+                indexer=BIDSLayoutIndexer(validate=False, index_metadata=False)
+            )
+            config.loggers.cli.info(
+                f"Successfully re-created BIDSLayout for reports with invalid_filters='allow'. "
+                f"Root: {layout.root}, Derivatives: {layout.derivatives}"
+            )
+        except Exception as e:
+            config.loggers.cli.error(
+                f"Failed to re-create BIDSLayout with invalid_filters='allow': {e}. "
+                "Report generation may fail."
+            )
+            # Continue with the original layout, the error might persist or manifest differently
 
     output_dir_path = Path(output_dir).absolute()
     reportlets_dir_for_nireports = output_dir_path
@@ -114,10 +167,12 @@ def generate_reports(
         try:
             final_html_path = output_dir_path / html_report_filename
             config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
-            config.loggers.cli.info(f'  HTML will be: {final_html_path}')
-            config.loggers.cli.info(f'  Reportlets base dir for nireports: {reportlets_dir_for_nireports}')
+            config.loggers.cli.info(f'HTML will be: {final_html_path}')
+            config.loggers.cli.info(
+                f'Reportlets dir for nireports: {reportlets_dir_for_nireports}')
             if isinstance(current_bootstrap_file, str | Path):
-                config.loggers.cli.info(f'  Bootstrap file for nireports: {current_bootstrap_file}')
+                config.loggers.cli.info(
+                    f'  Bootstrap file for nireports: {current_bootstrap_file}')
 
             robj = SafeReport(
                 out_dir=str(output_dir_path), # Where the html_report_filename is saved
@@ -127,7 +182,7 @@ def generate_reports(
                 plugins=None,
                 out_filename=html_report_filename,
                 subject=subject_id_for_report,
-                session=None, 
+                session=None,
                 layout=layout, # Use the main, pre-configured layout
             )
             robj.generate_report()
