@@ -85,11 +85,11 @@ def generate_reports(
 
     try:
         report_specific_layout = BIDSLayout(
-            root=str(report_layout_root), # or simply layout.root
+            root=str(report_layout_root),
             derivatives=str(reportlets_dir),
             validate=False, # Basic validation
             indexer=BIDSLayoutIndexer(validate=False, index_metadata=False),
-            config={'invalid_filters': 'allow'}  # Added back per-instance config
+            invalid_filters='allow'
         )
         config.loggers.cli.info(
             f"Initialized report_specific_layout with root '{report_layout_root}' and "
