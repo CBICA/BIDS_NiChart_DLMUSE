@@ -115,16 +115,16 @@ def generate_reports(
         n_ses = len(layout.get_sessions(subject=subject_id_for_report))
 
         # Fallback for aggr_ses_reports if not defined in config
-        aggr_ses_reports_threshold = getattr(config.execution, 'aggr_ses_reports', 1)
+        aggr_ses_reports_threshold = getattr(config.execution, 'aggr_ses_reports', 3)
 
         if bootstrap_file is not None:
             # If a config file is specified, we do not override it
-            html_report = 'report.html'
+            html_report = f'sub-{subject_id_for_report}.html'
         elif n_ses <= aggr_ses_reports_threshold:
             # If there are only a few sessions for this subject,
             # we aggregate them in a single visual report.
             bootstrap_file = data.load('reports-spec.yml')
-            html_report = 'report.html'
+            html_report = f'sub-{subject_id_for_report}.html'
         else:
             # Beyond a threshold, we separate the reports
             bootstrap_file = data.load('reports-spec.yml')
@@ -146,7 +146,7 @@ def generate_reports(
                 config=bootstrap_file,
                 reportlets_dir=reportlets_dir,
                 plugins=None,
-                out_filename=Path(html_report).name,
+                out_filename=html_report,
                 subject_id=subject_id_for_report,
                 layout=report_specific_layout,
             )
@@ -193,7 +193,7 @@ def generate_reports(
                         config=bootstrap_file,
                         reportlets_dir=reportlets_dir,
                         plugins=None,
-                        out_filename=Path(html_report).name,
+                        out_filename=html_report,
                         subject_id=subject_id_for_report,
                         session=session_label,
                         layout=report_specific_layout,
