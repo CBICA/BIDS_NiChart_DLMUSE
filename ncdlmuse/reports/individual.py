@@ -197,18 +197,23 @@ def generate_reports(
                         # Store layout separately, not letting it pass to SQL queries
                         self._safe_layout = kwargs.pop('layout', None)
                         
-                        # Get the subject ID from kwargs and store it
-                        self._subject_id = kwargs.get('subject', 'unknown')
+                        # Get the subject ID from kwargs for our custom attribute
+                        # But don't remove it since the parent class needs it
+                        subject_from_kwargs = kwargs.get('subject', 'unknown')
+                        self._subject_id = subject_from_kwargs
                         
                         # Store the output directory for later use
                         self._output_dir = out_dir
+                        
+                        # Debug all the kwargs being passed
+                        config.loggers.cli.info(f"SafeReport kwargs keys: {list(kwargs.keys())}")
                         
                         # Call the parent class constructor
                         super().__init__(out_dir, run_uuid, **kwargs)
                         
                         # Debug info about the Report object attributes
                         config.loggers.cli.info(f"SafeReport initialized with run_uuid: {run_uuid}")
-                        config.loggers.cli.info(f"Subject ID from kwargs: {self._subject_id}")
+                        config.loggers.cli.info(f"Subject ID from kwargs: {subject_from_kwargs}")
                         config.loggers.cli.info(f"Output dir: {out_dir}")
                         config.loggers.cli.info(f"Available attributes: {dir(self)}")
                         
@@ -503,7 +508,102 @@ def generate_reports(
                         except Exception as e:
                             config.loggers.cli.error(f"Error in custom report generation: {e}", exc_info=True)
                             # Try standard report generation as a fallback
-                            super().generate_report()
+                            try:
+                                super().generate_report()
+                            except Exception as e2:
+                                config.loggers.cli.error(f"Standard report generation also failed: {e2}")
+                                # Last resort - create a basic HTML file with SVGs
+                                self._create_basic_html_with_figures(svg_files)
+                
+                    def _create_basic_html_with_figures(self, svg_files):
+                        """Create a basic HTML file with SVGs directly. Last resort method."""
+                        try:
+                            # Determine the output HTML file path
+                            html_file = None
+                            if hasattr(self, 'out_path'):
+                                html_file = self.out_path
+                            elif hasattr(self, '_output_dir') and hasattr(self, 'out_filename'):
+                                html_file = Path(self._output_dir) / self.out_filename
+                            elif hasattr(self, '_output_dir') and hasattr(self, '_subject_id'):
+                                # Create a file based on subject ID
+                                subject_id = self._subject_id
+                                if not str(subject_id).startswith('sub-'):
+                                    subject_id = f'sub-{subject_id}'
+                                html_file = Path(self._output_dir) / f"{subject_id}.html"
+                            
+                            if not html_file:
+                                config.loggers.cli.error("Could not determine output HTML file path")
+                                return
+                            
+                            config.loggers.cli.info(f"Creating basic HTML file at {html_file}")
+                            
+                            # Create a basic HTML with embedded SVGs
+                            html_content = '''<!DOCTYPE html>
+                            <html lang="en">
+                            <head>
+                                <meta charset="UTF-8">
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                <title>NCDLMUSE Report</title>
+                                <style>
+                                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+                                    .container { max-width: 1200px; margin: 0 auto; }
+                                    .header { background-color: #2c3e50; color: white; padding: 20px; margin-bottom: 20px; }
+                                    .card { border: 1px solid #ddd; border-radius: 5px; margin-bottom: 20px; overflow: hidden; }
+                                    .card-header { background-color: #3498db; color: white; padding: 10px 15px; }
+                                    .card-body { padding: 15px; }
+                                    .row { display: flex; flex-wrap: wrap; margin: 0 -10px; }
+                                    .col { flex: 1; padding: 0 10px; min-width: 300px; }
+                                    svg { max-width: 100%; height: auto; }
+                                </style>
+                            </head>
+                            <body>
+                                <div class="header">
+                                    <h1>NCDLMUSE Report</h1>
+                                    <p>Subject: ''' + (self._subject_id if hasattr(self, '_subject_id') else 'Unknown') + '''</p>
+                                </div>
+                                <div class="container">
+                                    <h2>Figures</h2>
+                                    <div class="row">
+                            '''
+                            
+                            for svg_file in svg_files:
+                                try:
+                                    with open(svg_file, 'r') as f:
+                                        svg_content = f.read()
+                                    
+                                    # Extract description from filename
+                                    filename = svg_file.name
+                                    components = filename.split('_')
+                                    desc = next((comp.replace('desc-', '') for comp in components if comp.startswith('desc-')), "Visualization")
+                                    
+                                    html_content += f'''
+                                    <div class="col">
+                                        <div class="card">
+                                            <div class="card-header">{desc}</div>
+                                            <div class="card-body">
+                                                {svg_content}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    '''
+                                except Exception as e:
+                                    config.loggers.cli.error(f"Error embedding SVG {svg_file}: {e}")
+                            
+                            html_content += '''
+                                    </div>
+                                </div>
+                            </body>
+                            </html>
+                            '''
+                            
+                            # Write the HTML file
+                            with open(html_file, 'w') as f:
+                                f.write(html_content)
+                            
+                            config.loggers.cli.info(f"Successfully created basic HTML file with {len(svg_files)} SVGs")
+                            
+                        except Exception as e:
+                            config.loggers.cli.error(f"Error creating basic HTML file: {e}")
                 
                 # Now create the safe report instance with layout
                 report_named_config_args['layout'] = layout  # Put layout back in args
@@ -512,14 +612,22 @@ def generate_reports(
                 config.loggers.cli.info(f"Subject ID for report: {subject_id_for_report}")
                 config.loggers.cli.info(f"Output HTML filename: {out_html_filename}")
                 
+                # Debug the configuration dictionaries to ensure no duplicate 'subject'
+                config.loggers.cli.info(f"report_named_config_args keys: {list(report_named_config_args.keys())}")
+                config.loggers.cli.info(f"bids_entity_filters_and_settings keys: {list(bids_entity_filters_and_settings.keys())}")
+                
+                # Create a copy of bids_entity_filters_and_settings without the 'subject' key
+                # since we already have it in the main bids_entity_filters_and_settings
+                safe_bids_filters = bids_entity_filters_and_settings.copy()
+                config.loggers.cli.info(f"Subject ID from filters: {safe_bids_filters.get('subject', 'not found')}")
+                
                 # The Report class expects (out_dir, run_uuid) as the first two positional parameters
-                # And the subject ID as a parameter named 'subject' in kwargs
+                # We'll let the subject parameter come from bids_entity_filters_and_settings
                 robj = SafeReport(
                     str(ncdlmuse_derivatives_dir),  # Directory to save the main HTML report
                     run_uuid,  # Second parameter is run_uuid, not subject_id
-                    subject=subject_id_for_report,  # Pass subject_id as a named parameter
                     **report_named_config_args,
-                    **bids_entity_filters_and_settings
+                    **safe_bids_filters
                 )
                 
                 config.loggers.cli.info("Report object created with custom SafeReport class")
