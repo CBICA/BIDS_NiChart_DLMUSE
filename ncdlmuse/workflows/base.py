@@ -717,7 +717,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # Connect inputs to subject summary
     workflow.connect([
-        (bidssrc, subject_summary_node, [(('t1w', _select_first_from_list), 't1w')]),
+        (bidssrc, subject_summary_node, [(('t1w', _make_list), 't1w')]),
         (dlmuse_node, subject_summary_node, [
             ('dlicv_mask', 'brain_mask_file'),
             ('dlmuse_segmentation', 'dlmuse_seg_file')
