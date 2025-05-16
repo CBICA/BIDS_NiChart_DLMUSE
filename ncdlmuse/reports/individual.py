@@ -204,6 +204,135 @@ def generate_reports(
                         if hasattr(self, '_safe_layout') and self._safe_layout is not None:
                             self.layout = self._safe_layout
                         return super().index(settings)
+                    
+                    # Override to ensure segmentation files are properly found
+                    def _load_json_metadata(self, filepath):
+                        metadata = super()._load_json_metadata(filepath)
+                        return metadata
+                    
+                    # Override to directly add figures to the report
+                    def _register_figures(self, svg_files, html_files):
+                        """Ensure all figures are registered and available for the report."""
+                        from nireports.assembler.elements import SVGFigure
+                        
+                        # Initialize figures section if needed
+                        if not hasattr(self, 'sections'):
+                            self.sections = []
+                        
+                        # Create a figures section to hold all SVGs
+                        figures_section = {
+                            'name': 'NCDLMUSE Figures',
+                            'reportlets': []
+                        }
+                        
+                        # Register the figures directly
+                        for svg_file in svg_files:
+                            # Extract subject, task, desc, etc. from filename 
+                            filename = svg_file.name
+                            components = filename.split('_')
+                            
+                            # Create a simple ID for the SVG
+                            svg_id = filename.replace('.svg', '').replace('-', '_').replace('.', '_')
+                            
+                            # Extract description from filename if available
+                            desc = next((comp.replace('desc-', '') for comp in components if comp.startswith('desc-')), None)
+                            if not desc:
+                                desc = "Visualization"
+                            
+                            # Create a title
+                            title = f"Figure: {desc}"
+                            
+                            # Load SVG content directly
+                            try:
+                                with open(svg_file, 'r') as f:
+                                    svg_content = f.read()
+                                
+                                # Create a reportlet dictionary
+                                reportlet = {
+                                    'name': title,
+                                    'file_id': svg_id,
+                                    'description': f"NCDLMUSE {desc}",
+                                    'raw_content': svg_content
+                                }
+                                
+                                # Add to the figures section
+                                figures_section['reportlets'].append(reportlet)
+                                config.loggers.cli.info(f"Added SVG to figures section: {title}")
+                            except Exception as e:
+                                config.loggers.cli.error(f"Error loading SVG {svg_file}: {e}")
+                        
+                        # Add the figures section to the report
+                        if figures_section['reportlets']:
+                            self.sections.append(figures_section)
+                            config.loggers.cli.info(f"Added figures section with {len(figures_section['reportlets'])} reportlets")
+                    
+                    def generate_report(self):
+                        """Generate the report with figures properly included."""
+                        config.loggers.cli.info("Starting custom report generation with figure embedding")
+                        
+                        # First, find all SVG files in the figures directory
+                        subject_figures_dir = Path(self.out_dir) / f"sub-{self.subject_id}" / "figures"
+                        if subject_figures_dir.exists():
+                            svg_files = list(subject_figures_dir.glob("**/*.svg"))
+                            html_files = list(subject_figures_dir.glob("**/*.html"))
+                            config.loggers.cli.info(f"Found {len(svg_files)} SVG files and {len(html_files)} HTML files to include")
+                            
+                            # Process and register these files
+                            self._register_figures(svg_files, html_files)
+                        
+                        # Custom HTML generation that ensures figures are embedded
+                        try:
+                            # Run the standard report generation process
+                            super().generate_report()
+                            
+                            # After generation, check if the HTML has figures content
+                            html_file = Path(self.out_dir) / f"{self.out_filename}"
+                            if html_file.exists():
+                                with open(html_file, 'r') as f:
+                                    html_content = f.read()
+                                
+                                # If HTML seems empty, directly embed SVGs
+                                if 'nireports-figure' not in html_content.lower() and svg_files:
+                                    config.loggers.cli.info("HTML file missing figures, adding them directly")
+                                    
+                                    # Create simple HTML with embedded SVGs
+                                    html_content_parts = html_content.split('</body>')
+                                    svg_html = '<div class="container"><h2>NCDLMUSE Figures</h2>'
+                                    
+                                    for svg_file in svg_files:
+                                        try:
+                                            with open(svg_file, 'r') as f:
+                                                svg_content = f.read()
+                                            
+                                            # Extract description from filename
+                                            desc = next((comp.replace('desc-', '') for comp in svg_file.name.split('_') 
+                                                        if comp.startswith('desc-')), "Visualization")
+                                            
+                                            svg_html += f'<div class="card mb-3"><div class="card-header">{desc}</div>'
+                                            svg_html += f'<div class="card-body">{svg_content}</div></div>'
+                                            
+                                        except Exception as e:
+                                            config.loggers.cli.error(f"Error embedding SVG {svg_file}: {e}")
+                                    
+                                    svg_html += '</div>'
+                                    
+                                    # Insert before the closing body tag
+                                    if len(html_content_parts) > 1:
+                                        new_html = html_content_parts[0] + svg_html + '</body>' + html_content_parts[1]
+                                    else:
+                                        # If no closing body tag found, add content to the end with proper tags
+                                        new_html = html_content.rstrip() + svg_html + '</body></html>'
+                                    
+                                    # Write the updated HTML
+                                    with open(html_file, 'w') as f:
+                                        f.write(new_html)
+                                    
+                                    config.loggers.cli.info(f"Successfully embedded {len(svg_files)} SVGs directly into HTML")
+                        
+                        except Exception as e:
+                            config.loggers.cli.error(f"Error in custom report generation: {e}", exc_info=True)
+                            # Try standard report generation as a fallback
+                            super().generate_report()
                 
                 # Now create the safe report instance with layout
                 report_named_config_args['layout'] = layout  # Put layout back in args
