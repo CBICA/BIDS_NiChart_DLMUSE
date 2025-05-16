@@ -33,18 +33,15 @@ from ncdlmuse import config, data
 
 def generate_reports(
     subject_list,
-    output_dir, # This is the main derivatives output directory (e.g., .../ncdlmuse/)
+    output_dir,  # This is the main derivatives output directory (e.g., .../ncdlmuse/)
     run_uuid,
-    session_list=None, # List of session labels (without 'ses-' prefix)
-    bootstrap_file=None, # Path to reports-spec.yml (string or Path)
+    session_list=None,  # List of session labels (without 'ses-' prefix)
+    bootstrap_file=None,  # Path to reports-spec.yml (string or Path)
     work_dir=None,
     boilerplate_only=False,
-    layout: BIDSLayout = None, # The BIDSLayout object (already includes derivatives)
+    layout: BIDSLayout = None,  # The BIDSLayout object (already including derivatives)
 ):
-    """
-    Generate reports for a list of subjects using nireports.
-    Adopts the fMRIPrep pattern for instantiating nireports.Report.
-    """
+    """Generate reports for a list of subjects using nireports."""
     report_errors = []
 
     if not layout:
@@ -54,88 +51,61 @@ def generate_reports(
         return 1
 
     output_dir_path = Path(output_dir).absolute()
-    reportlets_dir_for_nireport = output_dir_path
+    reportlets_dir = None
+    if work_dir is not None:
+        reportlets_dir = Path(work_dir) / 'reportlets'
 
     if isinstance(subject_list, str):
         subject_list = [subject_list]
 
-    # Load bootstrap file
-    loaded_bootstrap_config = {}
-    if bootstrap_file is None:
-        spec_file_path = data.load('reports-spec.yml')
-        try:
-            with open(spec_file_path, 'r') as f:
-                loaded_bootstrap_config = yaml.safe_load(f)
-        except Exception as e:
-            config.loggers.cli.error(f'Error loading bootstrap file: {e}')
-            return 1
-    elif isinstance(bootstrap_file, str | Path):
-        spec_file_path = Path(bootstrap_file)
-        try:
-            with open(spec_file_path, 'r') as f:
-                loaded_bootstrap_config = yaml.safe_load(f)
-        except Exception as e:
-            config.loggers.cli.error(f'Error loading bootstrap file: {e}')
-            return 1
-    elif isinstance(bootstrap_file, dict):
-        loaded_bootstrap_config = bootstrap_file
-    else:
-        config.loggers.cli.error('Invalid bootstrap_file type')
-        return 1
-
     for subject_label_with_prefix in subject_list:
         subject_id_for_report = subject_label_with_prefix.lstrip('sub-')
-        report_save_directory = output_dir_path
-        out_html_filename = f'{subject_label_with_prefix}.html'
-
+        
         if boilerplate_only:
             config.loggers.cli.info(f'Generating boilerplate for {subject_label_with_prefix}...')
-            Path(report_save_directory / f'{subject_label_with_prefix}_CITATION.md').write_text(
+            Path(output_dir_path / f'{subject_label_with_prefix}_CITATION.md').write_text(
                 f'# Boilerplate for {subject_label_with_prefix}\n'
                 f'NCDLMUSE Version: {config.environment.version}'
             )
             continue
 
+        # The number of sessions is intentionally not based on session_list but
+        # on the total number of sessions, because we want the final derivatives
+        # folder to be the same whether sessions were run one at a time or all-together.
+        n_ses = len(layout.get_sessions(subject=subject_id_for_report))
+
+        if bootstrap_file is not None:
+            # If a config file is specified, we do not override it
+            html_report = f'{subject_label_with_prefix}.html'
+        elif n_ses <= config.execution.aggr_ses_reports:
+            # If there are only a few sessions for this subject,
+            # we aggregate them in a single visual report.
+            bootstrap_file = data.load('reports-spec.yml')
+            html_report = f'{subject_label_with_prefix}.html'
+        else:
+            # Beyond a threshold, we separate the reports by session
+            bootstrap_file = data.load('reports-spec.yml')
+            html_report = f'{subject_label_with_prefix}_anat.html'
+
         try:
-            final_html_path = report_save_directory / out_html_filename
+            final_html_path = output_dir_path / html_report
             config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
             config.loggers.cli.info(f'Main HTML will be: {final_html_path}')
-            config.loggers.cli.info(f'Reportlets base dir for nireports: {reportlets_dir_for_nireport}')
+            if reportlets_dir:
+                config.loggers.cli.info(f'Reportlets base dir for nireports: {reportlets_dir}')
             if isinstance(bootstrap_file, (str, Path)):
-                config.loggers.cli.info(f'Bootstrap file for nireports: {spec_file_path}')
-
-            # Prepare entities to be passed as keyword arguments to nireports.Report
-            report_constructor_kwargs = {
-                'bootstrap_file': loaded_bootstrap_config,
-                'out_filename': out_html_filename,
-                'reportlets_dir': str(reportlets_dir_for_nireport),
-                'layout': layout,
-                'subject': subject_id_for_report,
-                'output_dir': str(report_save_directory),
-            }
-
-            if session_list and len(session_list) == 1:
-                session_id_for_entity = session_list[0].lstrip('ses-')
-                if layout.get_sessions(
-                    subject=subject_id_for_report, session=session_id_for_entity):
-                    report_constructor_kwargs['session'] = session_id_for_entity
-                else:
-                    config.loggers.cli.warning(
-                        f"Specified session '{session_id_for_entity}' not found for subject "
-                        f"'{subject_id_for_report}'. Not passing session to Report constructor."
-                    )
-            elif session_list and len(session_list) > 1:
-                config.loggers.cli.warning(
-                    f"Multiple sessions provided ({session_list}) for subject "
-                    f"'{subject_id_for_report}'. Report will be subject-level. "
-                    f"Session-specific components depend on spec file."
-                )
+                config.loggers.cli.info(f'Bootstrap file for nireports: {bootstrap_file}')
 
             # Generate the report
             robj = Report(
-                str(report_save_directory),    # 1. Positional: out_dir
-                run_uuid,                      # 2. Positional: run_uuid
-                **report_constructor_kwargs
+                str(output_dir_path),    # 1. Positional: out_dir
+                run_uuid,                # 2. Positional: run_uuid
+                bootstrap_file=str(bootstrap_file),
+                out_filename=html_report,
+                reportlets_dir=str(reportlets_dir) if reportlets_dir else None,
+                layout=layout,
+                subject=subject_id_for_report,
+                output_dir=str(output_dir_path),
             )
 
             robj.generate_report()
@@ -148,6 +118,57 @@ def generate_reports(
             err_msg = f'Report generation failed for {subject_label_with_prefix}: {e}'
             config.loggers.cli.error(err_msg, exc_info=True)
             report_errors.append(subject_label_with_prefix)
+
+        if n_ses > config.execution.aggr_ses_reports:
+            # Beyond a certain number of sessions per subject,
+            # we separate the reports per session
+            if session_list is None:
+                all_filters = config.execution.bids_filters or {}
+                filters = all_filters.get('t1w', {})  # Use t1w instead of asl for our case
+                session_list = layout.get_sessions(
+                    subject=subject_id_for_report, **filters
+                )
+
+            # Drop ses- prefixes
+            session_list = [ses[4:] if ses.startswith('ses-') else ses for ses in session_list]
+
+            for session_label in session_list:
+                bootstrap_file = data.load('reports-spec.yml')
+                html_report = f'{subject_label_with_prefix}_ses-{session_label}.html'
+
+                try:
+                    final_html_path = output_dir_path / html_report
+                    config.loggers.cli.info(
+                        f'Generating session report for {subject_label_with_prefix} '
+                        f'session {session_label}...')
+                    config.loggers.cli.info(f'Session HTML will be: {final_html_path}')
+
+                    # Generate the session report
+                    robj = Report(
+                        str(output_dir_path),    # 1. Positional: out_dir
+                        run_uuid,                # 2. Positional: run_uuid
+                        bootstrap_file=str(bootstrap_file),
+                        out_filename=html_report,
+                        reportlets_dir=str(reportlets_dir) if reportlets_dir else None,
+                        layout=layout,
+                        subject=subject_id_for_report,
+                        session=session_label,
+                        output_dir=str(output_dir_path),
+                    )
+
+                    robj.generate_report()
+                    config.loggers.cli.info(
+                        f'Successfully generated session report for {subject_label_with_prefix} '
+                        f'session {session_label} at {final_html_path}'
+                    )
+
+                except Exception as e:
+                    err_msg = (
+                        f'Session report generation failed for {subject_label_with_prefix} '
+                        f'session {session_label}: {e}'
+                    )
+                    config.loggers.cli.error(err_msg, exc_info=True)
+                    report_errors.append(f'{subject_label_with_prefix}_ses-{session_label}')
 
     if report_errors:
         joined_error_subjects = ', '.join(report_errors)
