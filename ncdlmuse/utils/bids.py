@@ -189,7 +189,7 @@ def write_derivative_description(bids_dir, deriv_dir):
     deriv_dir = Path(deriv_dir)
     desc = {
         'Name': 'BIDS NiChart DLMUSE: BIDS-Apps wrapper for NiChart DLMUSE',
-        'BIDSVersion': '1.9.0',
+        'BIDSVersion': '1.10.0',
         'PipelineDescription': {
             'Name': 'BIDS_NiChart_DLMUSE',
             'Version': __version__,

@@ -28,6 +28,7 @@ from nireports.assembler.report import Report
 from bids.layout import BIDSLayout
 
 from ncdlmuse import config, data
+from ncdlmuse.utils import bids as bids_utils
 
 
 def generate_reports(
@@ -128,7 +129,7 @@ def generate_reports(
                 if not figures_ds_desc_path.exists():
                     ds_desc_content = {
                         'Name': f'{subject_label_with_prefix} NCDLMUSE Reportlets',
-                        'BIDSVersion': config.bids.version, # Use BIDS version from config
+                        'BIDSVersion': '1.10.0',  # Using the standard BIDS version from utils.bids
                         'DatasetType': 'derivative',
                         'GeneratedBy': [{
                             'Name': 'ncdlmuse',
@@ -207,6 +208,10 @@ def generate_reports(
                 # Now create the safe report instance with layout
                 report_named_config_args['layout'] = layout  # Put layout back in args
                 
+                # Log important information for debugging
+                config.loggers.cli.info(f"Subject ID for report: {subject_id_for_report}")
+                config.loggers.cli.info(f"Output HTML filename: {out_html_filename}")
+                
                 robj = SafeReport(
                     str(ncdlmuse_derivatives_dir),  # Directory to save the main HTML report
                     run_uuid,
@@ -215,6 +220,11 @@ def generate_reports(
                 )
                 
                 config.loggers.cli.info("Report object created with custom SafeReport class")
+                
+                # Log more detailed info about the report object
+                config.loggers.cli.info(f"Report will be saved to: {final_html_path}")
+                if hasattr(robj, '_safe_layout') and robj._safe_layout is not None:
+                    config.loggers.cli.info("Layout is available in the report object")
                 
                 robj.generate_report()
                 config.loggers.cli.info(
