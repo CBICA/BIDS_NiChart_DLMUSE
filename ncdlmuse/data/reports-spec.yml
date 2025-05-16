@@ -1,13 +1,5 @@
 package: ncdlmuse
 title: Visual report for participant '{subject}' - NCDLMUSE
-# Configure filtering to be more permissive
-config:
-  bids_filters: {}
-  ignore_subject_ses_for_html: true  # Allow HTML files at the subject level regardless of session
-  # Add specific search paths to include the figures directory
-  search_paths:
-    - "{output_dir}/sub-{subject}/figures"
-    - "{output_dir}/sub-{subject}"
 
 sections:
 - name: Summary

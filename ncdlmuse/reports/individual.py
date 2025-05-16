@@ -59,24 +59,33 @@ def generate_reports(
     if isinstance(subject_list, str):
         subject_list = [subject_list]
 
-    # Initial loading of spec_file_path_to_load (if bootstrap_file is a path or None)
-    # This part was corrected for proper try/except/else structure.
-    loaded_bootstrap_config = {} # This will hold the dict from yaml.safe_load
+    # Load bootstrap file
+    loaded_bootstrap_config = {}
     if bootstrap_file is None:
         spec_file_path = data.load('reports-spec.yml')
-        # try to load spec_file_path into loaded_bootstrap_config
+        try:
+            with open(spec_file_path, 'r') as f:
+                loaded_bootstrap_config = yaml.safe_load(f)
+        except Exception as e:
+            config.loggers.cli.error(f'Error loading bootstrap file: {e}')
+            return 1
     elif isinstance(bootstrap_file, str | Path):
         spec_file_path = Path(bootstrap_file)
-        # try to load spec_file_path into loaded_bootstrap_config
+        try:
+            with open(spec_file_path, 'r') as f:
+                loaded_bootstrap_config = yaml.safe_load(f)
+        except Exception as e:
+            config.loggers.cli.error(f'Error loading bootstrap file: {e}')
+            return 1
     elif isinstance(bootstrap_file, dict):
         loaded_bootstrap_config = bootstrap_file
     else:
-        # error
+        config.loggers.cli.error('Invalid bootstrap_file type')
         return 1
 
     for subject_label_with_prefix in subject_list:
         subject_id_for_report = subject_label_with_prefix.lstrip('sub-')
-        report_save_directory = Path(output_dir).absolute() # Ensure it's a Path
+        report_save_directory = output_dir_path
         out_html_filename = f'{subject_label_with_prefix}.html'
 
         if boilerplate_only:
@@ -91,19 +100,18 @@ def generate_reports(
             final_html_path = report_save_directory / out_html_filename
             config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
             config.loggers.cli.info(f'Main HTML will be: {final_html_path}')
-            config.loggers.cli.info(
-                f'Reportlets base dir for nireports: {reportlets_dir_for_nireport}')
-            config.loggers.cli.info(f'Bootstrap file for nireports: {spec_file_path}')
+            config.loggers.cli.info(f'Reportlets base dir for nireports: {reportlets_dir_for_nireport}')
+            if isinstance(bootstrap_file, (str, Path)):
+                config.loggers.cli.info(f'Bootstrap file for nireports: {spec_file_path}')
 
             # Prepare entities to be passed as keyword arguments to nireports.Report
-            # These are used for BIDS filtering and for string formatting in the spec file.
             report_constructor_kwargs = {
-                'bootstrap_file': loaded_bootstrap_config, # Use the loaded dict
+                'bootstrap_file': loaded_bootstrap_config,
                 'out_filename': out_html_filename,
                 'reportlets_dir': str(reportlets_dir_for_nireport),
                 'layout': layout,
                 'subject': subject_id_for_report,
-                'output_dir': str(report_save_directory), # For meta_repl
+                'output_dir': str(report_save_directory),
             }
 
             if session_list and len(session_list) == 1:
@@ -123,20 +131,7 @@ def generate_reports(
                     f"Session-specific components depend on spec file."
                 )
 
-            subject_figures_dir = output_dir_path / subject_label_with_prefix / 'figures'
-            if subject_figures_dir.is_dir():
-                figures_ds_desc = subject_figures_dir / 'dataset_description.json'
-                if not figures_ds_desc.exists():
-                     json.dump({
-                        'Name': f'{subject_label_with_prefix} NCDLMUSE Reportlets',
-                        'BIDSVersion': '1.4.1',
-                        'DatasetType': 'derivative',
-                        'GeneratedBy': [{
-                            'Name': 'ncdlmuse',
-                            'Version': config.environment.version
-                            }]
-                    }, figures_ds_desc.open('w'), indent=2)
-
+            # Generate the report
             robj = Report(
                 str(report_save_directory),    # 1. Positional: out_dir
                 run_uuid,                      # 2. Positional: run_uuid
