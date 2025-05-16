@@ -24,15 +24,11 @@ import json
 import re
 from pathlib import Path
 
-import pybids  # Import pybids to set global config
 import yaml
 from bids.layout import BIDSLayout, BIDSLayoutIndexer
 from nireports.assembler.report import Report
 
 from ncdlmuse import config, data
-
-# Set pybids global option to allow invalid filters
-pybids.config.set_option('invalid_filters', 'allow')
 
 
 def generate_reports(
@@ -93,11 +89,11 @@ def generate_reports(
             derivatives=str(reportlets_dir),
             validate=False, # Basic validation
             indexer=BIDSLayoutIndexer(validate=False, index_metadata=False),
-            # config={'invalid_filters': 'allow'}  # Removed per-instance config
+            config={'invalid_filters': 'allow'}  # Added back per-instance config
         )
         config.loggers.cli.info(
             f"Initialized report_specific_layout with root '{report_layout_root}' and "
-            f"derivatives '{reportlets_dir}' (pybids global invalid_filters=allow)")
+            f"derivatives '{reportlets_dir}' and invalid_filters allowed")
     except Exception as e:
         config.loggers.cli.error(f'Failed to create report_specific_layout: {e}')
         # Fallback to original layout if specific one fails, but log it.
