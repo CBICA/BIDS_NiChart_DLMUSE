@@ -88,11 +88,12 @@ def generate_reports(
             root=str(report_layout_root), # or simply layout.root
             derivatives=str(reportlets_dir),
             validate=False, # Basic validation
-            indexer=BIDSLayoutIndexer(validate=False, index_metadata=False)
+            indexer=BIDSLayoutIndexer(validate=False, index_metadata=False),
+            config={'invalid_filters': 'allow'}  # Allow unrecognized BIDS entities
         )
         config.loggers.cli.info(
             f"Initialized report_specific_layout with root '{report_layout_root}' and "
-            f"derivatives '{reportlets_dir}'")
+            f"derivatives '{reportlets_dir}' and invalid_filters allowed")
     except Exception as e:
         config.loggers.cli.error(f'Failed to create report_specific_layout: {e}')
         # Fallback to original layout if specific one fails, but log it.
