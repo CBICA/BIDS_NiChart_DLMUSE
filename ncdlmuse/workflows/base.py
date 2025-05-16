@@ -709,7 +709,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     subject_summary_node = pe.Node(
         SubjectSummary(
             subject_id=_current_t1w_entities.get('subject', 'UNKNOWN'),
-            session_id=_current_t1w_entities.get('session'),
+            session_id=_current_t1w_entities.get('session', 'N/A'),
         ),
         name='subject_summary_node',
         run_without_submitting=True
@@ -717,7 +717,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # Connect inputs to subject summary
     workflow.connect([
-        (bidssrc, subject_summary_node, [(('t1w', _select_first_from_list), 't1w_file')]),
+        (bidssrc, subject_summary_node, [(('t1w', _select_first_from_list), 't1w')]),
         (dlmuse_node, subject_summary_node, [
             ('dlicv_mask', 'brain_mask_file'),
             ('dlmuse_segmentation', 'dlmuse_seg_file')
@@ -815,10 +815,10 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     workflow.connect([
         # Subject Summary Report
         (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
-        
+
         # Execution Provenance Report
         (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
-        
+
         # Error Report
         (dlmuse_node, check_dlmuse_outputs_node, [
             ('dlmuse_segmentation', 'segmentation_file'),
@@ -826,7 +826,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         ]),
         (check_dlmuse_outputs_node, error_report_node, [('error_messages_list', 'error_messages')]),
         (error_report_node, ds_error_report, [('out_report', 'in_file')]),
-        
+
         # Workflow Provenance Report
         (create_volumes_json_node, workflow_provenance_report_node, [('output_json_path', 'provenance_json_file')]),
         (workflow_provenance_report_node, ds_workflow_provenance_report, [('out_report', 'in_file')]),

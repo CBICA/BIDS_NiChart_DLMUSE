@@ -36,6 +36,7 @@ class SummaryInterface(SimpleInterface):
 SUBJECT_TEMPLATE = """\
 \t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
+\t\t<li>Session ID: {session_id}</li>
 \t\t<li>Input T1w images: {n_t1s:d}</li>
 \t</ul>
 """
@@ -49,6 +50,7 @@ class _SummaryOutputSpec(TraitedSpec):
 class _SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     t1w = traits.List(File(exists=True), desc='T1w structural images')
     subject_id = traits.Str(desc='Subject ID')
+    session_id = traits.Str(desc='Session ID', mandatory=False)
 
 
 class _SubjectSummaryOutputSpec(_SummaryOutputSpec):
@@ -71,6 +73,7 @@ class SubjectSummary(SummaryInterface):
     def _generate_segment(self):
         return SUBJECT_TEMPLATE.format(
             subject_id=self.inputs.subject_id,
+            session_id=getattr(self.inputs, 'session_id', 'N/A'),
             n_t1s=len(self.inputs.t1w),
         )
 
