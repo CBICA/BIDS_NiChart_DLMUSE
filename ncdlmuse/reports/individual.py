@@ -26,9 +26,33 @@ from pathlib import Path
 
 import yaml
 from bids.layout import BIDSLayout, BIDSLayoutIndexer
-from nireports.assembler.report import Report
+from nireports.assembler.report import Report as NireportsReport
 
 from ncdlmuse import config, data
+
+
+# Custom Report class to safely handle the layout object
+class SafeReport(NireportsReport):
+    def __init__(self, out_dir, run_uuid, layout=None, **kwargs):
+        # Store the layout object separately to prevent it from being treated as a BIDS filter
+        self._safe_layout = layout
+        # We must ensure the original Report class does not see 'layout' in kwargs
+        # if it iterates over them to build filters.
+        super().__init__(out_dir, run_uuid, **kwargs)
+
+    def index(self, settings=None):
+        # Assign the stored layout to self.layout before the parent's index method is called,
+        # as it will use self.layout.get()
+        if hasattr(self, '_safe_layout') and self._safe_layout is not None:
+            self.layout = self._safe_layout
+        else:
+            # Fallback or error if layout wasn't provided, though generate_reports checks this.
+            config.loggers.cli.warning('SafeReport.index called without a _safe_layout.')
+            # Attempt to use a layout from settings if available, or raise error
+            if 'layout' in settings:
+                 self.layout = settings['layout'] # this is risky if settings['layout'] is not a BIDSLayout
+
+        return super().index(settings)
 
 
 def generate_reports(
@@ -141,7 +165,7 @@ def generate_reports(
                 config.loggers.cli.info(f'Bootstrap file for nireports: {bootstrap_file}')
 
             # Generate the report
-            robj = Report(
+            robj = SafeReport(
                 out_dir=str(output_dir_path),
                 run_uuid=run_uuid,
                 config=bootstrap_file,
@@ -188,7 +212,7 @@ def generate_reports(
                     config.loggers.cli.info(f'Session HTML will be: {final_html_path}')
 
                     # Generate the session report
-                    robj = Report(
+                    robj = SafeReport(
                         out_dir=str(output_dir_path),
                         run_uuid=run_uuid,
                         config=bootstrap_file,
