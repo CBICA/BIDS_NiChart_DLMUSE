@@ -665,10 +665,9 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     figures_dir = Path(derivatives_dir) / f'sub-{_current_t1w_entities["subject"]}' / 'figures'
     figures_dir.mkdir(parents=True, exist_ok=True)
 
-    # Build the base filename with all entities from the original T1w
-    base_entities = {k: v for k, v in _current_t1w_entities.items() 
-                    if k not in ['datatype', 'suffix', 'extension']}
-    base_filename = '_'.join(f'{k}-{v}' for k, v in sorted(base_entities.items()))
+    # Get base filename from original T1w file path
+    t1w_path = Path(_t1w_file_path)
+    base_filename = t1w_path.stem.replace('.nii', '').replace('.gz', '')
 
     # Reportlet for Brain Mask
     plot_brain_mask = pe.Node(
@@ -843,6 +842,24 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     )
     workflow.connect([
         (segmentation_qc_report_node, ds_segmentation_qc_report, [('out_report', 'in_file')]),
+    ])
+
+    # Also generate the main subject-level HTML report
+    ds_main_report = pe.Node(
+        DerivativesDataSink(
+            base_directory=str(derivatives_dir),
+            desc='summary',
+            datatype='figures',
+            suffix='T1w',
+            extension='.html',
+            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
+            dismiss_entities=['session', 'acquisition'],  # Ensure this goes to subject level
+        ),
+        name='ds_main_report',
+        run_without_submitting=True,
+    )
+    workflow.connect([
+        (subject_summary_node, ds_main_report, [('out_report', 'in_file')]),
     ])
     # === END HTML Report Generation ===
 
