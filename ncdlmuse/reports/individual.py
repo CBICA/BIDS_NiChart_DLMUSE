@@ -20,13 +20,13 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-from pathlib import Path
-import yaml
-import re
 import json
+import re
+from pathlib import Path
 
+import yaml
+from bids.layout import BIDSLayout, BIDSLayoutIndexer
 from nireports.assembler.report import Report
-from bids.layout import BIDSLayout
 
 from ncdlmuse import config, data
 
@@ -51,7 +51,7 @@ def generate_reports(
         return 1
 
     output_dir_path = Path(output_dir).absolute()
-    
+
     # The reportlets are in the work directory under reportlets/
     reportlets_dir = None
     if work_dir is not None:
@@ -60,9 +60,47 @@ def generate_reports(
     if isinstance(subject_list, str):
         subject_list = [subject_list]
 
+    reportlets_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create a BIDSLayout specifically for report generation,
+    # ensuring it knows about the reportlets_dir.
+    # We need a 'root' for BIDSLayout, even if we're primarily interested in derivatives.
+    # Using the work_dir as a pseudo-root or the original layout's root.
+    # Let's use the original layout's root and add our reportlets_dir as a derivative.
+
+    report_layout_root = layout.root if layout else work_dir # Fallback if original layout is None
+
+    # Ensure dataset_description.json exists in reportlets_dir for BIDSLayout
+    # This is crucial for BIDSLayout to recognize it as a valid BIDS (derivative) dataset
+    desc_file = reportlets_dir / 'dataset_description.json'
+    if not desc_file.exists():
+        config.loggers.cli.info(f'Creating dummy dataset_description.json in {reportlets_dir}')
+        desc_content = {
+            'Name': 'NCDLMUSE Reportlets',
+            'BIDSVersion': '1.10.0', # Or a version appropriate for nireports
+            'GeneratedBy': [{'Name': 'ncdlmuse'}]
+        }
+        with open(desc_file, 'w') as f:
+            json.dump(desc_content, f, indent=2)
+
+    try:
+        report_specific_layout = BIDSLayout(
+            root=str(report_layout_root), # or simply layout.root
+            derivatives=str(reportlets_dir),
+            validate=False, # Basic validation
+            indexer=BIDSLayoutIndexer(validate=False, index_metadata=False)
+        )
+        config.loggers.cli.info(
+            f"Initialized report_specific_layout with root '{report_layout_root}' and "
+            f"derivatives '{reportlets_dir}'")
+    except Exception as e:
+        config.loggers.cli.error(f'Failed to create report_specific_layout: {e}')
+        # Fallback to original layout if specific one fails, but log it.
+        report_specific_layout = layout
+
     for subject_label_with_prefix in subject_list:
         subject_id_for_report = subject_label_with_prefix.lstrip('sub-')
-        
+
         if boilerplate_only:
             config.loggers.cli.info(f'Generating boilerplate for {subject_label_with_prefix}...')
             Path(output_dir_path / f'{subject_label_with_prefix}_CITATION.md').write_text(
@@ -100,14 +138,14 @@ def generate_reports(
 
             # Generate the report
             robj = Report(
-                str(output_dir_path),    # 1. Positional: out_dir
-                run_uuid,                # 2. Positional: run_uuid
-                bootstrap_file=str(bootstrap_file),
-                out_filename=html_report,
-                reportlets_dir=str(reportlets_dir) if reportlets_dir else None,
-                layout=layout,
-                subject=subject_id_for_report,
-                output_dir=str(output_dir_path),
+                output_path=str(output_dir_path),
+                run_uuid=run_uuid,
+                config=bootstrap_file,
+                reportlets_dir=reportlets_dir,
+                plugins=None,
+                out_filename=Path(html_report).name,
+                subject_id=subject_id_for_report,
+                layout=report_specific_layout,
             )
 
             robj.generate_report()
@@ -147,15 +185,15 @@ def generate_reports(
 
                     # Generate the session report
                     robj = Report(
-                        str(output_dir_path),    # 1. Positional: out_dir
-                        run_uuid,                # 2. Positional: run_uuid
-                        bootstrap_file=str(bootstrap_file),
-                        out_filename=html_report,
-                        reportlets_dir=str(reportlets_dir) if reportlets_dir else None,
-                        layout=layout,
-                        subject=subject_id_for_report,
+                        output_path=str(output_dir_path),
+                        run_uuid=run_uuid,
+                        config=bootstrap_file,
+                        reportlets_dir=reportlets_dir,
+                        plugins=None,
+                        out_filename=Path(html_report).name,
+                        subject_id=subject_id_for_report,
                         session=session_label,
-                        output_dir=str(output_dir_path),
+                        layout=report_specific_layout,
                     )
 
                     robj.generate_report()
