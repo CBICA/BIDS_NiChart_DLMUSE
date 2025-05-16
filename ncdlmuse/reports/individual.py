@@ -34,24 +34,20 @@ from ncdlmuse import config, data
 # Custom Report class to safely handle the layout object
 class SafeReport(NireportsReport):
     def __init__(self, out_dir, run_uuid, layout=None, **kwargs):
-        # Store the layout object separately to prevent it from being treated as a BIDS filter
         self._safe_layout = layout
-        # We must ensure the original Report class does not see 'layout' in kwargs
-        # if it iterates over them to build filters.
         super().__init__(out_dir, run_uuid, **kwargs)
 
     def index(self, settings=None):
-        # Assign the stored layout to self.layout before the parent's index method is called,
-        # as it will use self.layout.get()
         if hasattr(self, '_safe_layout') and self._safe_layout is not None:
             self.layout = self._safe_layout
         else:
-            # Fallback or error if layout wasn't provided, though generate_reports checks this.
             config.loggers.cli.warning('SafeReport.index called without a _safe_layout.')
-            # Attempt to use a layout from settings if available, or raise error
-            if 'layout' in settings:
-                 self.layout = settings['layout'] # this is risky if settings['layout'] is not a BIDSLayout
-
+            if settings and 'layout' in settings and isinstance(settings['layout'], BIDSLayout):
+                 self.layout = settings['layout']
+            elif self.layout is None: # If self.layout wasn't set by super().__init__ either
+                 config.loggers.cli.error('No BIDSLayout available for SafeReport.index.')
+                 # Potentially raise an error or try to create a default one, though risky.
+                 # For now, this will likely cause issues in super().index(settings)
         return super().index(settings)
 
 
@@ -61,7 +57,7 @@ def generate_reports(
     run_uuid,
     session_list=None,  # List of session labels (without 'ses-' prefix)
     bootstrap_file=None,  # Path to reports-spec.yml (string or Path)
-    work_dir=None,
+    work_dir=None, # Not directly used for reportlet location anymore
     boilerplate_only=False,
     layout: BIDSLayout = None,  # The BIDSLayout object (already including derivatives)
 ):
@@ -73,164 +69,119 @@ def generate_reports(
             'BIDSLayout (already including derivatives) is required for report generation.'
         )
         return 1
+    
+    # Ensure the provided layout has invalid_filters='allow'
+    # This is crucial. The layout from cli/run.py must be created with this.
+    # Here we check and warn if not set, as modifying an existing layout's config can be tricky.
+    if not (hasattr(layout, 'config') and isinstance(layout.config, dict) \
+        and layout.config.get('invalid_filters') == 'allow'):
+        config.loggers.cli.warning(
+            "The BIDSLayout provided to generate_reports does not explicitly have "
+            "invalid_filters='allow'. This might lead to errors if reports-spec.yml "
+            "or nireports internals imply non-standard BIDS entities. "
+            "It is recommended to initialize the BIDSLayout with this setting."
+        )
 
     output_dir_path = Path(output_dir).absolute()
-
-    # The reportlets are in the work directory under reportlets/
-    reportlets_dir = None
-    if work_dir is not None:
-        reportlets_dir = Path(work_dir) / 'reportlets'
+    reportlets_dir_for_nireports = output_dir_path
 
     if isinstance(subject_list, str):
         subject_list = [subject_list]
-
-    reportlets_dir.mkdir(parents=True, exist_ok=True)
-
-    # Create a BIDSLayout specifically for report generation,
-    # ensuring it knows about the reportlets_dir.
-    # We need a 'root' for BIDSLayout, even if we're primarily interested in derivatives.
-    # Using the work_dir as a pseudo-root or the original layout's root.
-    # Let's use the original layout's root and add our reportlets_dir as a derivative.
-
-    report_layout_root = layout.root if layout else work_dir # Fallback if original layout is None
-
-    # Ensure dataset_description.json exists in reportlets_dir for BIDSLayout
-    # This is crucial for BIDSLayout to recognize it as a valid BIDS (derivative) dataset
-    desc_file = reportlets_dir / 'dataset_description.json'
-    if not desc_file.exists():
-        config.loggers.cli.info(f'Creating dummy dataset_description.json in {reportlets_dir}')
-        desc_content = {
-            'Name': 'NCDLMUSE Reportlets',
-            'BIDSVersion': '1.10.0', # Or a version appropriate for nireports
-            'GeneratedBy': [{'Name': 'ncdlmuse'}]
-        }
-        with open(desc_file, 'w') as f:
-            json.dump(desc_content, f, indent=2)
-
-    try:
-        report_specific_layout = BIDSLayout(
-            root=str(report_layout_root),
-            derivatives=str(reportlets_dir),
-            validate=False, # Basic validation
-            indexer=BIDSLayoutIndexer(validate=False, index_metadata=False),
-            invalid_filters='allow'
-        )
-        config.loggers.cli.info(
-            f"Initialized report_specific_layout with root '{report_layout_root}' and "
-            f"derivatives '{reportlets_dir}' and invalid_filters allowed")
-    except Exception as e:
-        config.loggers.cli.error(f'Failed to create report_specific_layout: {e}')
-        # Fallback to original layout if specific one fails, but log it.
-        report_specific_layout = layout
 
     for subject_label_with_prefix in subject_list:
         subject_id_for_report = subject_label_with_prefix.lstrip('sub-')
 
         if boilerplate_only:
-            config.loggers.cli.info(f'Generating boilerplate for {subject_label_with_prefix}...')
             Path(output_dir_path / f'{subject_label_with_prefix}_CITATION.md').write_text(
-                f'# Boilerplate for {subject_label_with_prefix}\n'
+                f'# Boilerplate for {subject_label_with_prefix}\\n'
                 f'NCDLMUSE Version: {config.environment.version}'
             )
             continue
 
-        # The number of sessions is intentionally not based on session_list but
-        # on the total number of sessions, because we want the final derivatives
-        # folder to be the same whether sessions were run one at a time or all-together.
         n_ses = len(layout.get_sessions(subject=subject_id_for_report))
-
-        # Fallback for aggr_ses_reports if not defined in config
         aggr_ses_reports_threshold = getattr(config.execution, 'aggr_ses_reports', 3)
 
-        if bootstrap_file is not None:
-            # If a config file is specified, we do not override it
-            html_report = f'sub-{subject_id_for_report}.html'
-        elif n_ses <= aggr_ses_reports_threshold:
-            # If there are only a few sessions for this subject,
-            # we aggregate them in a single visual report.
-            bootstrap_file = data.load('reports-spec.yml')
-            html_report = f'sub-{subject_id_for_report}.html'
+        current_bootstrap_file = bootstrap_file
+        if current_bootstrap_file is None:
+            current_bootstrap_file = data.load('reports-spec.yml')
+
+        if n_ses <= aggr_ses_reports_threshold:
+            html_report_filename = f'sub-{subject_id_for_report}.html'
         else:
-            # Beyond a threshold, we separate the reports
-            bootstrap_file = data.load('reports-spec.yml')
-            html_report = f'sub-{subject_id_for_report}.html'
+            # Main subject report still named this way, session reports will be separate
+            html_report_filename = f'sub-{subject_id_for_report}.html' 
 
         try:
-            final_html_path = output_dir_path / html_report
+            final_html_path = output_dir_path / html_report_filename
             config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
-            config.loggers.cli.info(f'HTML will be: {final_html_path}')
-            if reportlets_dir:
-                config.loggers.cli.info(f'Reportlets base dir for nireports: {reportlets_dir}')
-            if isinstance(bootstrap_file, str | Path):
-                config.loggers.cli.info(f'Bootstrap file for nireports: {bootstrap_file}')
+            config.loggers.cli.info(f'  HTML will be: {final_html_path}')
+            config.loggers.cli.info(f'  Reportlets base dir for nireports: {reportlets_dir_for_nireports}')
+            if isinstance(current_bootstrap_file, str | Path):
+                config.loggers.cli.info(f'  Bootstrap file for nireports: {current_bootstrap_file}')
 
-            # Generate the report
             robj = SafeReport(
-                out_dir=str(output_dir_path),
+                out_dir=str(output_dir_path), # Where the html_report_filename is saved
                 run_uuid=run_uuid,
-                bootstrap_file=bootstrap_file,
-                reportlets_dir=reportlets_dir,
+                bootstrap_file=current_bootstrap_file,
+                reportlets_dir=str(reportlets_dir_for_nireports),
                 plugins=None,
-                out_filename=html_report,
+                out_filename=html_report_filename,
                 subject=subject_id_for_report,
-                session=None,
-                layout=report_specific_layout,
+                session=None, 
+                layout=layout, # Use the main, pre-configured layout
             )
-
             robj.generate_report()
             config.loggers.cli.info(
                 f'Successfully generated report for {subject_label_with_prefix} at '
                 f'{final_html_path}'
             )
-
         except Exception as e:
             err_msg = f'Report generation failed for {subject_label_with_prefix}: {e}'
             config.loggers.cli.error(err_msg, exc_info=True)
             report_errors.append(subject_label_with_prefix)
 
         if n_ses > aggr_ses_reports_threshold:
-            # Beyond a certain number of sessions per subject,
-            # we separate the reports per session
-            if session_list is None:
+            active_session_list = session_list
+            if active_session_list is None:
                 all_filters = config.execution.bids_filters or {}
-                filters = all_filters.get('t1w', {})  # Use t1w instead of asl for our case
-                session_list = layout.get_sessions(
+                filters = all_filters.get('t1w', {})
+                active_session_list = layout.get_sessions(
                     subject=subject_id_for_report, **filters
                 )
+            active_session_list = [ses[4:] if ses.startswith('ses-') \
+                else ses for ses in active_session_list]
 
-            # Drop ses- prefixes
-            session_list = [ses[4:] if ses.startswith('ses-') else ses for ses in session_list]
+            for session_label in active_session_list:
+                session_bootstrap_file = bootstrap_file
+                if session_bootstrap_file is None:
+                    session_bootstrap_file = data.load('reports-spec.yml')
 
-            for session_label in session_list:
-                bootstrap_file = data.load('reports-spec.yml')
-                html_report = f'sub-{subject_id_for_report}_ses-{session_label}.html'
-
+                session_html_report_filename = \
+                    f'sub-{subject_id_for_report}_ses-{session_label}.html'
                 try:
-                    final_html_path = output_dir_path / html_report
+                    final_session_html_path = output_dir_path / session_html_report_filename
                     config.loggers.cli.info(
                         f'Generating session report for {subject_label_with_prefix} '
-                        f'session {session_label}...')
-                    config.loggers.cli.info(f'Session HTML will be: {final_html_path}')
+                        f'session {session_label}...'
+                    )
+                    config.loggers.cli.info(f'  Session HTML will be: {final_session_html_path}')
 
-                    # Generate the session report
-                    robj = SafeReport(
+                    srobj = SafeReport(
                         out_dir=str(output_dir_path),
                         run_uuid=run_uuid,
-                        bootstrap_file=bootstrap_file,
-                        reportlets_dir=reportlets_dir,
+                        bootstrap_file=session_bootstrap_file,
+                        reportlets_dir=str(reportlets_dir_for_nireports),
                         plugins=None,
-                        out_filename=html_report,
+                        out_filename=session_html_report_filename,
                         subject=subject_id_for_report,
                         session=session_label,
-                        layout=report_specific_layout,
+                        layout=layout, # Use the main, pre-configured layout
                     )
-
-                    robj.generate_report()
+                    srobj.generate_report()
                     config.loggers.cli.info(
                         f'Successfully generated session report for {subject_label_with_prefix} '
-                        f'session {session_label} at {final_html_path}'
+                        f'session {session_label} at {final_session_html_path}'
                     )
-
                 except Exception as e:
                     err_msg = (
                         f'Session report generation failed for {subject_label_with_prefix} '
@@ -245,5 +196,4 @@ def generate_reports(
             f'Report generation failed for the following subjects: {joined_error_subjects}'
         )
         return 1
-
     return 0
