@@ -710,7 +710,6 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         SubjectSummary(
             subject_id=_current_t1w_entities.get('subject', 'UNKNOWN'),
             session_id=_current_t1w_entities.get('session'),
-            acquisition_id=_current_t1w_entities.get('acquisition'),
         ),
         name='subject_summary_node',
         run_without_submitting=True
