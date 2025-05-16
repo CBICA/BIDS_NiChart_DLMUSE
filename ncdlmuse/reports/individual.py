@@ -193,18 +193,22 @@ def generate_reports(
             try:      
                 # Create a subclass of Report that handles the BIDS layout properly
                 class SafeReport(Report):
-                    def __init__(self, out_dir, subject_id, **kwargs):
+                    def __init__(self, out_dir, run_uuid, **kwargs):
                         # Store layout separately, not letting it pass to SQL queries
                         self._safe_layout = kwargs.pop('layout', None)
                         
-                        # Store the output directory and subject ID for later use
-                        self._output_dir = out_dir
-                        self._subject_id = subject_id
+                        # Get the subject ID from kwargs and store it
+                        self._subject_id = kwargs.get('subject', 'unknown')
                         
-                        super().__init__(out_dir, subject_id, **kwargs)
+                        # Store the output directory for later use
+                        self._output_dir = out_dir
+                        
+                        # Call the parent class constructor
+                        super().__init__(out_dir, run_uuid, **kwargs)
                         
                         # Debug info about the Report object attributes
-                        config.loggers.cli.info(f"SafeReport initialized with subject_id: {subject_id}")
+                        config.loggers.cli.info(f"SafeReport initialized with run_uuid: {run_uuid}")
+                        config.loggers.cli.info(f"Subject ID from kwargs: {self._subject_id}")
                         config.loggers.cli.info(f"Output dir: {out_dir}")
                         config.loggers.cli.info(f"Available attributes: {dir(self)}")
                         
@@ -294,22 +298,51 @@ def generate_reports(
                         config.loggers.cli.info(f"Available attributes in generate_report: {dir(self)}")
                         
                         try:
+                            # Debug all known attributes that might contain subject info
+                            if hasattr(self, 'subject'):
+                                config.loggers.cli.info(f"self.subject = {self.subject}")
+                            if hasattr(self, '_subject_id'):
+                                config.loggers.cli.info(f"self._subject_id = {self._subject_id}")
+                        
                             # First, determine the figures directory
                             # Try multiple approaches to find the path
                             subject_figures_dir = None
                             
-                            # Get the subject ID, either from our custom attribute or from Report's attribute
-                            subject_id = getattr(self, '_subject_id', None) or getattr(self, 'subject', None)
-                            if not subject_id:
-                                config.loggers.cli.warning("Subject ID not found, using 'unknown'")
-                                subject_id = 'unknown'
+                            # Get the subject ID from all possible sources
+                            subject_candidates = []
                             
+                            # 1. Check our custom attribute
+                            if hasattr(self, '_subject_id'):
+                                subject_candidates.append(str(self._subject_id))
+                            
+                            # 2. Check the standard 'subject' attribute
+                            if hasattr(self, 'subject'):
+                                subject_candidates.append(str(self.subject))
+                            
+                            # 3. Check any bids_filters for subject
+                            if hasattr(self, 'bids_filters') and isinstance(self.bids_filters, dict) and 'subject' in self.bids_filters:
+                                subject_candidates.append(str(self.bids_filters['subject']))
+                            
+                            config.loggers.cli.info(f"Subject candidates: {subject_candidates}")
+                            
+                            # Use the first non-empty candidate
+                            subject_id = next((s for s in subject_candidates if s), 'unknown')
+                            
+                            # Ensure it's a string
+                            subject_id = str(subject_id)
+                            
+                            # Log the subject ID we're using
                             config.loggers.cli.info(f"Using subject ID: {subject_id}")
                             
                             # Approach 1: Direct approach - check standard figures location
                             if hasattr(self, '_output_dir'):
-                                # First try the standard BIDS location
-                                subject_figures_dir = Path(self._output_dir) / f"sub-{subject_id}" / "figures"
+                                # First try the standard BIDS location - first with "sub-" prefix
+                                if subject_id.startswith('sub-'):
+                                    subject_dir_name = subject_id
+                                else:
+                                    subject_dir_name = f"sub-{subject_id}"
+                                
+                                subject_figures_dir = Path(self._output_dir) / subject_dir_name / "figures"
                                 config.loggers.cli.info(f"Approach 1 - Looking for figures in: {subject_figures_dir}")
                             
                             # Approach 2: Brute force search for any subdirectories with figures
@@ -479,12 +512,12 @@ def generate_reports(
                 config.loggers.cli.info(f"Subject ID for report: {subject_id_for_report}")
                 config.loggers.cli.info(f"Output HTML filename: {out_html_filename}")
                 
-                # The second parameter to Report should be the subject ID, not the run_uuid
-                # This is critical for finding the correct figures directory
+                # The Report class expects (out_dir, run_uuid) as the first two positional parameters
+                # And the subject ID as a parameter named 'subject' in kwargs
                 robj = SafeReport(
                     str(ncdlmuse_derivatives_dir),  # Directory to save the main HTML report
-                    subject_id_for_report,  # Use the actual subject ID instead of run_uuid
-                    run_uuid=run_uuid,  # Pass run_uuid as a keyword argument instead
+                    run_uuid,  # Second parameter is run_uuid, not subject_id
+                    subject=subject_id_for_report,  # Pass subject_id as a named parameter
                     **report_named_config_args,
                     **bids_entity_filters_and_settings
                 )
