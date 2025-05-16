@@ -29,6 +29,7 @@ from bids.layout import BIDSLayout, BIDSLayoutIndexer
 from nireports.assembler.report import Report as NireportsReport
 
 from ncdlmuse import config, data
+from ncdlmuse.utils.bids import write_derivative_description
 
 
 # Custom Report class to safely handle the layout object
@@ -63,6 +64,33 @@ def generate_reports(
 ):
     """Generate reports for a list of subjects using nireports."""
     report_errors = []
+
+    output_dir_path = Path(output_dir).absolute()
+
+    # Ensure dataset_description.json exists in the output directory
+    # output_dir is the ncdlmuse_dir, layout.root is the bids_dir
+    if layout and hasattr(layout, 'root') and layout.root:
+        bids_root_dir = Path(layout.root)
+        desc_path = output_dir_path / 'dataset_description.json'
+        if not desc_path.exists():
+            try:
+                config.loggers.cli.info(
+                    f'Attempting to write dataset_description.json to: {output_dir_path}'
+                )
+                write_derivative_description(bids_root_dir, output_dir_path)
+                config.loggers.cli.info(
+                    f'Successfully wrote dataset_description.json to: {output_dir_path}'
+                )
+            except Exception as e:
+                config.loggers.cli.warning(
+                    f'Could not write dataset_description.json to {output_dir_path}: {e}. '
+                    'This might cause issues if layout re-creation is needed.'
+                )
+    else:
+        config.loggers.cli.warning(
+            'BIDSLayout root not available, cannot ensure dataset_description.json exists '
+            'in the output directory prior to potential layout re-creation.'
+        )
 
     if not layout:
         config.loggers.cli.error(
@@ -120,7 +148,7 @@ def generate_reports(
             layout = BIDSLayout(
                 root=str(original_root),
                 derivatives=new_layout_derivatives,
-                config={'invalid_filters': 'allow'},
+                invalid_filters='allow',
                 validate=False, # Keep validation off for performance/flexibility
                 indexer=BIDSLayoutIndexer(validate=False, index_metadata=False)
             )
@@ -135,7 +163,6 @@ def generate_reports(
             )
             # Continue with the original layout, the error might persist or manifest differently
 
-    output_dir_path = Path(output_dir).absolute()
     reportlets_dir_for_nireports = output_dir_path
 
     if isinstance(subject_list, str):

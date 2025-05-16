@@ -136,9 +136,6 @@ def main():
             work_dir=config.execution.work_dir,
             layout=config.execution.layout,
         )
-        # Write dataset_description.json if it doesn't exist (basic version)
-        if not (config.execution.ncdlmuse_dir / "dataset_description.json").exists():
-            write_derivative_description(config.execution.bids_dir, config.execution.ncdlmuse_dir)
 
         return exit_code
 
@@ -200,9 +197,6 @@ def main():
             boilerplate_only=True,
             layout=config.execution.layout,
         )
-        # Write dataset_description.json if it doesn't exist (basic version)
-        if not (config.execution.ncdlmuse_dir / "dataset_description.json").exists():
-            write_derivative_description(config.execution.bids_dir, config.execution.ncdlmuse_dir)
 
         return exit_code
 
