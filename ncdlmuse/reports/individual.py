@@ -114,10 +114,13 @@ def generate_reports(
         # folder to be the same whether sessions were run one at a time or all-together.
         n_ses = len(layout.get_sessions(subject=subject_id_for_report))
 
+        # Fallback for aggr_ses_reports if not defined in config
+        aggr_ses_reports_threshold = getattr(config.execution, 'aggr_ses_reports', 1)
+
         if bootstrap_file is not None:
             # If a config file is specified, we do not override it
             html_report = 'report.html'
-        elif n_ses <= config.execution.aggr_ses_reports:
+        elif n_ses <= aggr_ses_reports_threshold:
             # If there are only a few sessions for this subject,
             # we aggregate them in a single visual report.
             bootstrap_file = data.load('reports-spec.yml')
@@ -138,7 +141,7 @@ def generate_reports(
 
             # Generate the report
             robj = Report(
-                output_path=str(output_dir_path),
+                out_dir=str(output_dir_path),
                 run_uuid=run_uuid,
                 config=bootstrap_file,
                 reportlets_dir=reportlets_dir,
@@ -159,7 +162,7 @@ def generate_reports(
             config.loggers.cli.error(err_msg, exc_info=True)
             report_errors.append(subject_label_with_prefix)
 
-        if n_ses > config.execution.aggr_ses_reports:
+        if n_ses > aggr_ses_reports_threshold:
             # Beyond a certain number of sessions per subject,
             # we separate the reports per session
             if session_list is None:
@@ -185,7 +188,7 @@ def generate_reports(
 
                     # Generate the session report
                     robj = Report(
-                        output_path=str(output_dir_path),
+                        out_dir=str(output_dir_path),
                         run_uuid=run_uuid,
                         config=bootstrap_file,
                         reportlets_dir=reportlets_dir,
