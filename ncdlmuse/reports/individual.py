@@ -147,7 +147,7 @@ def generate_reports(
                 reportlets_dir=reportlets_dir,
                 plugins=None,
                 out_filename=html_report,
-                subject_id=subject_id_for_report,
+                subject=subject_id_for_report,
                 layout=report_specific_layout,
             )
 
@@ -194,7 +194,7 @@ def generate_reports(
                         reportlets_dir=reportlets_dir,
                         plugins=None,
                         out_filename=html_report,
-                        subject_id=subject_id_for_report,
+                        subject=subject_id_for_report,
                         session=session_label,
                         layout=report_specific_layout,
                     )
