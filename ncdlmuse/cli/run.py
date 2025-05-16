@@ -36,6 +36,7 @@ from multiprocessing import Manager, Process
 warnings.filterwarnings("ignore", message=".*already loaded.*packaging.*")
 warnings.filterwarnings("ignore", message=".*is non-raw schema type.*")
 
+from .. import data
 
 def main():
     """Entry point for ncdlmuse BIDS App.

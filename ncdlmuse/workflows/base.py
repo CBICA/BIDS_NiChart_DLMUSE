@@ -667,7 +667,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # Get base filename from original T1w file path
     t1w_path = Path(_t1w_file_path)
-    base_filename = t1w_path.stem.replace('.nii', '').replace('.gz', '')
+    base_filename = t1w_path.stem.replace('_T1w.nii.gz', '').replace('_T1w.nii', '')
 
     # Reportlet for Brain Mask
     plot_brain_mask = pe.Node(
