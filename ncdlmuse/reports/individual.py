@@ -168,11 +168,12 @@ def generate_reports(
             robj = SafeReport(
                 out_dir=str(output_dir_path),
                 run_uuid=run_uuid,
-                config=bootstrap_file,
+                bootstrap_file=bootstrap_file,
                 reportlets_dir=reportlets_dir,
                 plugins=None,
                 out_filename=html_report,
                 subject=subject_id_for_report,
+                session=None,
                 layout=report_specific_layout,
             )
 
@@ -215,7 +216,7 @@ def generate_reports(
                     robj = SafeReport(
                         out_dir=str(output_dir_path),
                         run_uuid=run_uuid,
-                        config=bootstrap_file,
+                        bootstrap_file=bootstrap_file,
                         reportlets_dir=reportlets_dir,
                         plugins=None,
                         out_filename=html_report,
