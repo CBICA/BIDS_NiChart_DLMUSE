@@ -798,41 +798,62 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         run_without_submitting=True,
     )
 
+    # Create input nodes for the file paths
+    summary_input = pe.Node(
+        niu.IdentityInterface(fields=['out_dir', 'filename']),
+        name='summary_input'
+    )
+    summary_input.inputs.out_dir = str(current_reportlets_dir.absolute())
+    summary_input.inputs.filename = f'{base_filename}_desc-summary_T1w.html'
+
+    about_input = pe.Node(
+        niu.IdentityInterface(fields=['out_dir', 'filename']),
+        name='about_input'
+    )
+    about_input.inputs.out_dir = str(current_reportlets_dir.absolute())
+    about_input.inputs.filename = f'{base_filename}_desc-about_T1w.html'
+
+    errors_input = pe.Node(
+        niu.IdentityInterface(fields=['out_dir', 'filename']),
+        name='errors_input'
+    )
+    errors_input.inputs.out_dir = str(current_reportlets_dir.absolute())
+    errors_input.inputs.filename = f'{base_filename}_desc-processingErrors_T1w.html'
+
+    provenance_input = pe.Node(
+        niu.IdentityInterface(fields=['out_dir', 'filename']),
+        name='provenance_input'
+    )
+    provenance_input.inputs.out_dir = str(current_reportlets_dir.absolute())
+    provenance_input.inputs.filename = f'{base_filename}_desc-workflowProvenance_T1w.html'
+
     # Connect all report nodes
     workflow.connect([
         # Subject Summary Report
         (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
-        (niu.IdentityInterface(fields=['out_dir', 'filename'], 
-                               out_dir=str(current_reportlets_dir.absolute()),
-                               filename=f'{base_filename}_desc-summary_T1w.html'), 
-         ds_report_summary, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+        (summary_input, ds_report_summary, [('out_dir', 'out_dir'), ('filename', 'filename')]),
 
         # Execution Provenance Report
         (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
-        (niu.IdentityInterface(fields=['out_dir', 'filename'], 
-                               out_dir=str(current_reportlets_dir.absolute()),
-                               filename=f'{base_filename}_desc-about_T1w.html'), 
-         ds_report_about, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+        (about_input, ds_report_about, [('out_dir', 'out_dir'), ('filename', 'filename')]),
 
         # Error Report
         (dlmuse_node, check_dlmuse_outputs_node, [
             ('dlmuse_segmentation', 'segmentation_file'),
             ('dlmuse_volumes', 'volumes_csv_file')
         ]),
-        (check_dlmuse_outputs_node, error_report_node, [('error_messages_list', 'error_messages')]),
+        (check_dlmuse_outputs_node, error_report_node, \
+            [('error_messages_list', 'error_messages')]),
         (error_report_node, ds_error_report, [('out_report', 'in_file')]),
-        (niu.IdentityInterface(fields=['out_dir', 'filename'], 
-                               out_dir=str(current_reportlets_dir.absolute()),
-                               filename=f'{base_filename}_desc-processingErrors_T1w.html'), 
-         ds_error_report, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+        (errors_input, ds_error_report, [('out_dir', 'out_dir'), ('filename', 'filename')]),
 
         # Workflow Provenance Report
-        (create_volumes_json_node, workflow_provenance_report_node, [('output_json_path', 'provenance_json_file')]),
-        (workflow_provenance_report_node, ds_workflow_provenance_report, [('out_report', 'in_file')]),
-        (niu.IdentityInterface(fields=['out_dir', 'filename'], 
-                               out_dir=str(current_reportlets_dir.absolute()),
-                               filename=f'{base_filename}_desc-workflowProvenance_T1w.html'), 
-         ds_workflow_provenance_report, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+        (create_volumes_json_node, workflow_provenance_report_node, \
+            [('output_json_path', 'provenance_json_file')]),
+        (workflow_provenance_report_node, ds_workflow_provenance_report, \
+            [('out_report', 'in_file')]),
+        (provenance_input, ds_workflow_provenance_report, \
+            [('out_dir', 'out_dir'), ('filename', 'filename')]),
     ])
 
     # === END HTML Report Generation ===
