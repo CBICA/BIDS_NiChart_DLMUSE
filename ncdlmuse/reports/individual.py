@@ -43,6 +43,7 @@ class SafeReport(NireportsReport):
     def _load_reportlet(self, reportlet_path):
         """Override _load_reportlet to properly load and include reportlets."""
         import shutil
+        import os
         from pathlib import Path
 
         config.loggers.cli.info(f'Loading reportlet: {reportlet_path}')
@@ -61,7 +62,19 @@ class SafeReport(NireportsReport):
                 return None
         elif reportlet_path.suffix == '.svg':
             try:
-                figures_dir = Path(self.out_dir) / 'figures'
+                # Find the output directory attribute dynamically
+                output_dir = None
+                possible_attrs = ['output_dir', 'out_dir', '_output_dir', '_out_dir']
+                for attr in possible_attrs:
+                    if hasattr(self, attr):
+                        output_dir = Path(getattr(self, attr))
+                        break
+
+                if not output_dir:
+                    # Fallback to current working directory
+                    output_dir = Path(os.getcwd())
+
+                figures_dir = output_dir / 'figures'
                 figures_dir.mkdir(exist_ok=True)
 
                 target_path = figures_dir / reportlet_path.name
@@ -125,6 +138,7 @@ class SafeReport(NireportsReport):
 
     def generate_report(self):
         """Generate HTML report with all reportlets."""
+        import inspect
         import os
         from importlib import resources
         from pathlib import Path
@@ -132,10 +146,36 @@ class SafeReport(NireportsReport):
         if not hasattr(self, 'reportlets') or not self.reportlets:
             if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
                 self.reportlets = self._manual_reportlets
-                
+
         if not hasattr(self, 'reportlets') or not self.reportlets:
             config.loggers.cli.error('No reportlets available for report generation')
             return None
+
+        # Debug: Print all instance variables to find the correct attribute name
+        instance_vars = vars(self)
+        config.loggers.cli.info(f'Available attributes: {list(instance_vars.keys())}')
+
+        # Find the output directory attribute - use a fallback approach
+        output_dir_attr = None
+        possible_attrs = ['output_dir', 'out_dir', '_output_dir', '_out_dir']
+        for attr in possible_attrs:
+            if hasattr(self, attr):
+                output_dir_attr = attr
+                config.loggers.cli.info(f'Found output directory attribute: {attr}')
+                break
+
+        if not output_dir_attr:
+            # Get from initialization parameters if available
+            parent_init_params = inspect.signature(super(SafeReport, self).__init__).parameters
+            if 'out_dir' in parent_init_params and hasattr(self, 'out_filename'):
+                # If we have out_filename but not out_dir, infer from parent_dir
+                config.loggers.cli.info('Using cwd as output directory')
+                output_dir = Path(os.getcwd())
+            else:
+                config.loggers.cli.error('Cannot determine output directory attribute')
+                return None
+        else:
+            output_dir = Path(getattr(self, output_dir_attr))
 
         # Get template from nireports
         template_path = None
@@ -187,7 +227,6 @@ class SafeReport(NireportsReport):
                 pass
 
         # Prepare output directory
-        output_dir = Path(self.out_dir)
         figures_dir = output_dir / 'figures'
         figures_dir.mkdir(parents=True, exist_ok=True)
 
@@ -241,17 +280,17 @@ class SafeReport(NireportsReport):
 
         # Create final HTML
         html_content = html_template
-        html_content = html_content.replace('{{subject}}', \
-            str(self.metadata.get('subject', 'Unknown')))
-        html_content = html_content.replace('{{summary}}', summary_html \
-            or 'No summary available')
-        html_content = html_content.replace('{{anatomical}}', anatomical_html \
-            or 'No anatomical details available')
-        html_content = html_content.replace('{{processing}}', processing_html \
-            or 'No processing details available')
-        html_content = html_content.replace('{{about}}', about_html \
-            or 'No about information available')
-        
+        html_content = html_content.replace(
+            '{{subject}}', str(self.metadata.get('subject', 'Unknown')))
+        html_content = html_content.replace(
+            '{{summary}}', summary_html or 'No summary available')
+        html_content = html_content.replace(
+            '{{anatomical}}', anatomical_html or 'No anatomical details available')
+        html_content = html_content.replace(
+            '{{processing}}', processing_html or 'No processing details available')
+        html_content = html_content.replace(
+            '{{about}}', about_html or 'No about information available')
+
         # Write final HTML
         output_file = output_dir / f'{self.out_filename}'
         try:
@@ -303,8 +342,10 @@ def generate_reports(
 
             new_layout_derivatives = {}
             if isinstance(original_derivatives, dict):
-                new_layout_derivatives = {k: str(v.path) for k, v in original_derivatives.items() \
-                    if hasattr(v, 'path')}
+                new_layout_derivatives = {
+                    k: str(v.path) for k, v in original_derivatives.items()
+                    if hasattr(v, 'path')
+                }
             elif isinstance(original_derivatives, list):
                 new_layout_derivatives = [str(p) for p in original_derivatives]
             elif isinstance(original_derivatives, str | Path):
@@ -315,7 +356,9 @@ def generate_reports(
             # Add subject figures directory to derivatives if it exists
             for subject_label_with_prefix in subject_list:
                 subject_id = subject_label_with_prefix.lstrip('sub-')
-                subject_figures_dir = Path(output_dir).absolute() / f'sub-{subject_id}' / 'figures'
+                subject_figures_dir = (
+                    Path(output_dir).absolute() / f'sub-{subject_id}' / 'figures'
+                )
                 if subject_figures_dir.exists():
                     if isinstance(new_layout_derivatives, dict):
                         new_layout_derivatives[f'sub-{subject_id}'] = \
@@ -327,9 +370,13 @@ def generate_reports(
                             [new_layout_derivatives, str(subject_figures_dir.parent)]
 
             # If new_layout_derivatives is empty or still a string referring to out_dir
-            if (isinstance(new_layout_derivatives, dict) and not new_layout_derivatives) or \
-               (isinstance(new_layout_derivatives, str) and \
-                str(Path(output_dir).absolute()) in new_layout_derivatives):
+            is_empty_or_self_ref = (
+                (isinstance(new_layout_derivatives, dict) and not new_layout_derivatives) or
+                (isinstance(new_layout_derivatives, str) and
+                 str(Path(output_dir).absolute()) in new_layout_derivatives)
+            )
+
+            if is_empty_or_self_ref:
                 subject_dirs = []
                 for subject_label_with_prefix in subject_list:
                     subject_id = subject_label_with_prefix.lstrip('sub-')
@@ -354,7 +401,7 @@ def generate_reports(
                 indexer=BIDSLayoutIndexer(validate=False, index_metadata=False)
             )
         except Exception as e:
-            config.loggers.cli.error(f"Failed to re-create BIDSLayout: {e}")
+            config.loggers.cli.error(f'Failed to re-create BIDSLayout: {e}')
 
     reportlets_dir_for_nireports = output_dir_path
 
@@ -386,22 +433,27 @@ def generate_reports(
         if n_ses <= aggr_ses_reports_threshold:
             html_report_filename = f'sub-{subject_id_for_report}.html'
         else:
-            html_report_filename = f'sub-{subject_id_for_report}.html'
+            html_report_filename = f'sub-{subject_id_for_report}.html' 
 
         try:
             final_html_path = output_dir_path / html_report_filename
             config.loggers.cli.info(f'Generating report for {subject_label_with_prefix}...')
             config.loggers.cli.info(f'HTML will be: {final_html_path}')
             config.loggers.cli.info(
-                f'Reportlets dir for nireports: {reportlets_dir_for_nireports}')
+                f'Reportlets dir for nireports: {reportlets_dir_for_nireports}'
+            )
 
             try:
                 # List reportlets to verify they exist
                 svg_reportlets = list(reportlets_dir_for_nireports.glob('*.svg'))
                 html_reportlets = list(reportlets_dir_for_nireports.glob('*.html'))
                 if not svg_reportlets and not html_reportlets:
-                    config.loggers.cli.error(f'No reportlets found in {reportlets_dir_for_nireports}')
-                    raise FileNotFoundError(f'No reportlets found in {reportlets_dir_for_nireports}')
+                    config.loggers.cli.error(
+                        f'No reportlets found in {reportlets_dir_for_nireports}'
+                    )
+                    raise FileNotFoundError(
+                        f'No reportlets found in {reportlets_dir_for_nireports}'
+                    )
 
                 config.loggers.cli.info(
                     f'Found {len(svg_reportlets)} SVG reportlets and '
@@ -455,8 +507,9 @@ def generate_reports(
                 active_session_list = layout.get_sessions(
                     subject=subject_id_for_report, **filters
                 )
-            active_session_list = [ses[4:] if ses.startswith('ses-') \
-                else ses for ses in active_session_list]
+            active_session_list = [
+                ses[4:] if ses.startswith('ses-') else ses for ses in active_session_list
+            ]
 
             for session_label in active_session_list:
                 session_bootstrap_file = bootstrap_file
