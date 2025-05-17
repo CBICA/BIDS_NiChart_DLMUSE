@@ -35,7 +35,6 @@ class SafeReport(NireportsReport):
         self._safe_layout = layout
         self._reportlets_dir = reportlets_dir
 
-        # Set reportlets_dir first as the parent class needs it during initialization
         if reportlets_dir:
             kwargs['reportlets_dir'] = str(reportlets_dir)
 
@@ -48,172 +47,233 @@ class SafeReport(NireportsReport):
 
         config.loggers.cli.info(f'Loading reportlet: {reportlet_path}')
 
-        # Convert to Path object if it's a string
         reportlet_path = Path(reportlet_path)
 
-        # Check if file exists
         if not reportlet_path.exists():
             config.loggers.cli.error(f'Reportlet not found: {reportlet_path}')
             return None
 
-        # For HTML files, read and return the content
         if reportlet_path.suffix == '.html':
             try:
-                content = reportlet_path.read_text()
-                config.loggers.cli.info(f'Successfully loaded HTML reportlet: {reportlet_path}')
-                return content
+                return reportlet_path.read_text()
             except Exception as e:
-                config.loggers.cli.error(f'Error reading HTML reportlet {reportlet_path}: {e}')
+                config.loggers.cli.error(f'Error reading HTML reportlet: {e}')
                 return None
-
-        # For SVG files, copy to the output directory and return the relative path
         elif reportlet_path.suffix == '.svg':
             try:
-                # Create a figures directory in the output directory if it doesn't exist
                 figures_dir = Path(self.out_dir) / 'figures'
                 figures_dir.mkdir(exist_ok=True)
 
-                # Copy the SVG file to the figures directory
                 target_path = figures_dir / reportlet_path.name
                 shutil.copy2(reportlet_path, target_path)
 
-                # Return the relative path for inclusion in the HTML
-                rel_path = f'figures/{reportlet_path.name}'
-                config.loggers.cli.info(f'Successfully copied SVG reportlet to: {rel_path}')
-                return rel_path
+                return f'figures/{reportlet_path.name}'
             except Exception as e:
-                config.loggers.cli.error(f'Error copying SVG reportlet {reportlet_path}: {e}')
+                config.loggers.cli.error(f'Error copying SVG reportlet: {e}')
                 return None
 
-        config.loggers.cli.warning(f'Unsupported reportlet type: {reportlet_path}')
         return None
 
     def index(self, settings=None):
-        from pathlib import Path
-
         if hasattr(self, '_safe_layout') and self._safe_layout is not None:
             self.layout = self._safe_layout
-        else:
-            config.loggers.cli.warning('SafeReport.index called without a _safe_layout.')
-            if settings and 'layout' in settings and isinstance(settings['layout'], BIDSLayout):
-                 self.layout = settings['layout']
-            elif self.layout is None:
-                 config.loggers.cli.error('No BIDSLayout available for SafeReport.index.')
+        elif settings and 'layout' in settings and isinstance(settings['layout'], BIDSLayout):
+            self.layout = settings['layout']
+        elif self.layout is None:
+            config.loggers.cli.error('No BIDSLayout available for SafeReport.index.')
 
-        # Log the reportlets directory and settings
-        if hasattr(self, 'reportlets_dir'):
-            config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self.reportlets_dir}')
-        elif hasattr(self, '_reportlets_dir'):
-            config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self._reportlets_dir}')
+        if hasattr(self, '_reportlets_dir'):
             self.reportlets_dir = self._reportlets_dir
-        else:
-            config.loggers.cli.warning('SafeReport.index: No reportlets_dir provided')
 
-        if settings:
-            config.loggers.cli.info(f'SafeReport.index: settings = {settings}')
-
-        # We'll do a manual check for reportlets to ensure they're found
         reportlets = []
         reportlets_path = Path(self.reportlets_dir)
 
-        # Check that settings has the expected structure
         if settings and 'sections' in settings:
             for section in settings['sections']:
                 if 'reportlets' in section:
                     for reportlet_spec in section['reportlets']:
                         if 'bids' in reportlet_spec:
-                            # Match files based on BIDS entities
                             bids_spec = reportlet_spec['bids']
-                            extension = bids_spec.get('extension')
+                            extension = bids_spec.get('extension', ['.svg', '.html'])
                             desc = bids_spec.get('desc')
 
-                            # Handle different extension formats
-                            if extension:
-                                if isinstance(extension, list):
-                                    extensions = extension
-                                else:
-                                    extensions = [extension]
+                            if not isinstance(extension, list):
+                                extensions = [extension]
                             else:
-                                extensions = ['.svg', '.html']
+                                extensions = extension
 
-                            # Look for matching files
                             for ext in extensions:
-                                # Use glob to find matching files
-                                if desc:
-                                    pattern = f'*{desc}*{ext}'
-                                else:
-                                    pattern = f'*{ext}'
-
+                                pattern = f'*{desc}*{ext}' if desc else f'*{ext}'
                                 matches = list(reportlets_path.glob(pattern))
                                 for match in matches:
-                                    reportlet_path = str(match)
-                                    config.loggers.cli.info(f'Found reportlet: {reportlet_path}')
-                                    reportlets.append(reportlet_path)
+                                    config.loggers.cli.info(f'Found reportlet: {match}')
+                                    reportlets.append(str(match))
 
-        # Store the manually found reportlets
         self._manual_reportlets = reportlets
         config.loggers.cli.info(f'Manually found {len(reportlets)} reportlets')
 
-        # Call parent's index method
         try:
-            result = super().index(settings)
+            super().index(settings)
         except Exception as e:
             config.loggers.cli.error(f'Error in parent index method: {e}')
-            if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
-                config.loggers.cli.info('Using manually found reportlets')
-                self.reportlets = self._manual_reportlets
-            result = None
 
-        # Log the reportlets that were found
-        if hasattr(self, 'reportlets'):
-            config.loggers.cli.info(f'SafeReport.index: Found {len(self.reportlets)} reportlets')
-            for r in self.reportlets:
-                config.loggers.cli.info(f'  - {r}')
-        else:
-            config.loggers.cli.warning(
-                'SafeReport.index: No reportlets attribute found after indexing')
-            # If the parent didn't set reportlets, use our manual finding
-            if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
-                config.loggers.cli.info('Setting manually found reportlets')
+        if not hasattr(self, 'reportlets') or not self.reportlets:
+            if self._manual_reportlets:
                 self.reportlets = self._manual_reportlets
 
-        return result
+        return self.reportlets
 
     def generate_report(self):
-        """Override generate_report to add more logging and ensure reportlets are used."""
-        config.loggers.cli.info('SafeReport.generate_report: Starting report generation')
-        config.loggers.cli.info(
-            f'SafeReport.generate_report: reportlets_dir = {self.reportlets_dir}')
+        """Generate HTML report with all reportlets."""
+        import os
+        from importlib import resources
+        from pathlib import Path
 
-        # Make sure we have reportlets to use
         if not hasattr(self, 'reportlets') or not self.reportlets:
             if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
-                config.loggers.cli.info('Using manually found reportlets for report generation')
                 self.reportlets = self._manual_reportlets
+                
+        if not hasattr(self, 'reportlets') or not self.reportlets:
+            config.loggers.cli.error('No reportlets available for report generation')
+            return None
 
-        # Log what reportlets we'll use
-        if hasattr(self, 'reportlets'):
-            config.loggers.cli.info(
-                f'Using {len(self.reportlets)} reportlets for report generation:')
-            for r in self.reportlets:
-                config.loggers.cli.info(f'  - {r}')
+        # Get template from nireports
+        template_path = None
+        try:
+            import nireports
+            template_candidates = [
+                Path(nireports.__file__).parent / 'assembler' / 'data' / 'report.tpl',
+                Path(nireports.__file__).parent / 'data' / 'reports' / 'report.tpl'
+            ]
 
-        # Call parent's generate_report method
-        result = super().generate_report()
+            for candidate in template_candidates:
+                if candidate.exists():
+                    template_path = candidate
+                    break
 
-        config.loggers.cli.info('SafeReport.generate_report: Finished report generation')
-        return result
+            if not template_path:
+                with resources.as_file(data.load('report.tpl')) as resource_path:
+                    template_path = resource_path
+        except Exception as e:
+            config.loggers.cli.error(f'Error finding template: {e}')
+
+        # Minimal template as fallback
+        html_template = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Visual report for participant '{{subject}}' - NCDLMUSE</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin-bottom: 30px; }
+        h1, h2 { color: #333; }
+        img { max-width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Visual report for participant '{{subject}}' - NCDLMUSE</h1>
+    <div class="section"><h2>Summary</h2>{{summary}}</div>
+    <div class="section"><h2>Anatomical Processing</h2>{{anatomical}}</div>
+    <div class="section"><h2>Processing Details</h2>{{processing}}</div>
+    <div class="section"><h2>About</h2>{{about}}</div>
+</body>
+</html>
+"""
+
+        if template_path and Path(template_path).exists():
+            try:
+                html_template = Path(template_path).read_text()
+            except Exception:
+                pass
+
+        # Prepare output directory
+        output_dir = Path(self.out_dir)
+        figures_dir = output_dir / 'figures'
+        figures_dir.mkdir(parents=True, exist_ok=True)
+
+        # Organize reportlets
+        svg_paths = []
+        summary_html = ''
+        anatomical_html = ''
+        processing_html = ''
+        about_html = ''
+
+        for reportlet in self.reportlets:
+            reportlet_path = Path(reportlet)
+            if reportlet_path.suffix.lower() == '.svg':
+                target_path = figures_dir / reportlet_path.name
+                try:
+                    shutil.copy2(reportlet_path, target_path)
+                    svg_paths.append(f'figures/{reportlet_path.name}')
+                except Exception:
+                    pass
+            elif reportlet_path.suffix.lower() == '.html':
+                try:
+                    content = reportlet_path.read_text()
+                    filename = reportlet_path.name
+                    if 'summary' in filename.lower():
+                        summary_html += content + '\n'
+                    elif 'brain' in filename.lower() or 'segmentation' in filename.lower():
+                        anatomical_html += content + '\n'
+                    elif 'workflow' in filename.lower() or 'error' in filename.lower():
+                        processing_html += content + '\n'
+                    elif 'about' in filename.lower():
+                        about_html += content + '\n'
+                    else:
+                        processing_html += content + '\n'
+                except Exception:
+                    pass
+
+        # Add SVG references to anatomical section
+        for svg_path in svg_paths:
+            if 'brain' in svg_path.lower() or 'mask' in svg_path.lower():
+                anatomical_html += (
+                    f'<h3>Brain Mask</h3>\n'
+                    f'<div><img src="{svg_path}" alt="Brain Mask"></div>\n'
+                )
+            elif 'segmentation' in svg_path.lower() or 'dlmuse' in svg_path.lower():
+                anatomical_html += (
+                    f'<h3>DLMUSE Segmentation</h3>\n'
+                    f'<div><img src="{svg_path}" alt="DLMUSE Segmentation"></div>\n'
+                )
+            else:
+                anatomical_html += f'<div><img src="{svg_path}" alt="Figure"></div>\n'
+
+        # Create final HTML
+        html_content = html_template
+        html_content = html_content.replace('{{subject}}', \
+            str(self.metadata.get('subject', 'Unknown')))
+        html_content = html_content.replace('{{summary}}', summary_html \
+            or 'No summary available')
+        html_content = html_content.replace('{{anatomical}}', anatomical_html \
+            or 'No anatomical details available')
+        html_content = html_content.replace('{{processing}}', processing_html \
+            or 'No processing details available')
+        html_content = html_content.replace('{{about}}', about_html \
+            or 'No about information available')
+        
+        # Write final HTML
+        output_file = output_dir / f'{self.out_filename}'
+        try:
+            with open(output_file, 'w') as f:
+                f.write(html_content)
+            config.loggers.cli.info(f'Successfully wrote report to: {output_file}')
+        except Exception as e:
+            config.loggers.cli.error(f'Error writing report: {e}')
+            return None
+
+        return output_file
 
 
 def generate_reports(
     subject_list,
-    output_dir,  # This is the main derivatives output directory (e.g., .../ncdlmuse/)
+    output_dir,
     run_uuid,
-    session_list=None,  # List of session labels (without 'ses-' prefix)
-    bootstrap_file=None,  # Path to reports-spec.yml (string or Path)
-    work_dir=None, # Not directly used for reportlet location anymore
+    session_list=None,
+    bootstrap_file=None,
+    work_dir=None,
     boilerplate_only=False,
-    layout: BIDSLayout = None,  # The BIDSLayout object (already including derivatives)
+    layout: BIDSLayout = None,
 ):
     """Generate reports for a list of subjects using nireports."""
     report_errors = []
@@ -221,39 +281,25 @@ def generate_reports(
     output_dir_path = Path(output_dir).absolute()
 
     if not layout:
-        config.loggers.cli.error(
-            'BIDSLayout (already including derivatives) is required for report generation.'
-        )
+        config.loggers.cli.error('BIDSLayout is required for report generation.')
         return 1
 
     # Ensure the provided layout has invalid_filters='allow'
-    # This is crucial. The layout from cli/run.py must be created with this.
     layout_needs_recreation = False
     if hasattr(layout, 'config') and isinstance(layout.config, dict):
         if layout.config.get('invalid_filters') != 'allow':
             layout_needs_recreation = True
-            config.loggers.cli.warning(
-                "The BIDSLayout provided to generate_reports does not have invalid_filters='allow'"
-                " set in its config. Attempting to re-create it with this setting."
-            )
-    else: # No config attribute, or not a dict, assume it needs invalid_filters='allow'
+    else:
         layout_needs_recreation = True
-        config.loggers.cli.warning(
-            "The BIDSLayout provided to generate_reports does not have a standard config attribute"
-            " or it is not a dict. Attempting to re-create it with invalid_filters='allow'."
-        )
 
     if layout_needs_recreation:
         try:
-            # Preserve original derivatives and root if possible
             original_derivatives = layout.derivatives if hasattr(layout, 'derivatives') else None
             original_root = layout.root if hasattr(layout, 'root') else None
 
             if original_root is None:
-                config.loggers.cli.error(
-                    'Original layout root is None, cannot re-create layout for report generation.'
-                )
-                return 1 # Cannot proceed without a root
+                config.loggers.cli.error('Original layout root is None, cannot re-create layout.')
+                return 1
 
             new_layout_derivatives = {}
             if isinstance(original_derivatives, dict):
@@ -264,13 +310,7 @@ def generate_reports(
             elif isinstance(original_derivatives, str | Path):
                 new_layout_derivatives = str(original_derivatives)
             else:
-                 # Fallback if derivatives format is unknown, use output_dir_path
-                 # This might be too simplistic if multiple derivative paths were orig configured.
                 new_layout_derivatives = str(Path(output_dir).absolute())
-                config.loggers.cli.warning(
-                    f'Original layout derivatives format not recognized or empty. Using output_dir'
-                    f" '{new_layout_derivatives}' as derivative for re-created layout."
-                )
 
             # Add subject figures directory to derivatives if it exists
             for subject_label_with_prefix in subject_list:
@@ -283,19 +323,13 @@ def generate_reports(
                     elif isinstance(new_layout_derivatives, list):
                         new_layout_derivatives.append(str(subject_figures_dir.parent))
                     else:
-                        # If it's a string, convert to list and add
                         new_layout_derivatives = \
                             [new_layout_derivatives, str(subject_figures_dir.parent)]
-                    config.loggers.cli.info(
-                        f'Added subject figures parent directory to layout: '
-                        f'{subject_figures_dir.parent}'
-                    )
 
             # If new_layout_derivatives is empty or still a string referring to out_dir
             if (isinstance(new_layout_derivatives, dict) and not new_layout_derivatives) or \
                (isinstance(new_layout_derivatives, str) and \
                 str(Path(output_dir).absolute()) in new_layout_derivatives):
-                # Add the output_dir explicitly to ensure it's included
                 subject_dirs = []
                 for subject_label_with_prefix in subject_list:
                     subject_id = subject_label_with_prefix.lstrip('sub-')
@@ -303,7 +337,6 @@ def generate_reports(
                     if subject_dir.exists():
                         subject_dirs.append(str(subject_dir))
 
-                # Add all subject directories found
                 if subject_dirs:
                     if isinstance(new_layout_derivatives, dict):
                         for i, dir_path in enumerate(subject_dirs):
@@ -311,30 +344,17 @@ def generate_reports(
                     elif isinstance(new_layout_derivatives, list):
                         new_layout_derivatives.extend(subject_dirs)
                     else:
-                        # Convert to list
                         new_layout_derivatives = [new_layout_derivatives] + subject_dirs
-
-                config.loggers.cli.info(
-                    f'Added subject directories to layout derivatives: {subject_dirs}'
-                )
 
             layout = BIDSLayout(
                 root=str(original_root),
                 derivatives=new_layout_derivatives,
                 invalid_filters='allow',
-                validate=False, # Keep validation off for performance/flexibility
+                validate=False,
                 indexer=BIDSLayoutIndexer(validate=False, index_metadata=False)
             )
-            config.loggers.cli.info(
-                f"Successfully re-created BIDSLayout for reports with invalid_filters='allow'. "
-                f"Root: {layout.root}, Derivatives: {layout.derivatives}"
-            )
         except Exception as e:
-            config.loggers.cli.error(
-                f"Failed to re-create BIDSLayout with invalid_filters='allow': {e}. "
-                "Report generation may fail."
-            )
-            # Continue with the original layout, the error might persist or manifest differently
+            config.loggers.cli.error(f"Failed to re-create BIDSLayout: {e}")
 
     reportlets_dir_for_nireports = output_dir_path
 
@@ -355,13 +375,6 @@ def generate_reports(
         subject_figures_dir = output_dir_path / f'sub-{subject_id_for_report}' / 'figures'
         if subject_figures_dir.exists():
             reportlets_dir_for_nireports = subject_figures_dir
-            config.loggers.cli.info(
-                f'Using figures from: {reportlets_dir_for_nireports}'
-            )
-        else:
-            config.loggers.cli.warning(
-                f'Figures directory not found at: {subject_figures_dir}'
-            )
 
         n_ses = len(layout.get_sessions(subject=subject_id_for_report))
         aggr_ses_reports_threshold = getattr(config.execution, 'aggr_ses_reports', 3)
@@ -373,8 +386,7 @@ def generate_reports(
         if n_ses <= aggr_ses_reports_threshold:
             html_report_filename = f'sub-{subject_id_for_report}.html'
         else:
-            # Main subject report still named this way, session reports will be separate
-            html_report_filename = f'sub-{subject_id_for_report}.html' 
+            html_report_filename = f'sub-{subject_id_for_report}.html'
 
         try:
             final_html_path = output_dir_path / html_report_filename
@@ -382,27 +394,21 @@ def generate_reports(
             config.loggers.cli.info(f'HTML will be: {final_html_path}')
             config.loggers.cli.info(
                 f'Reportlets dir for nireports: {reportlets_dir_for_nireports}')
-            if isinstance(current_bootstrap_file, str | Path):
-                config.loggers.cli.info(
-                    f'  Bootstrap file for nireports: {current_bootstrap_file}')
 
             try:
                 # List reportlets to verify they exist
                 svg_reportlets = list(reportlets_dir_for_nireports.glob('*.svg'))
                 html_reportlets = list(reportlets_dir_for_nireports.glob('*.html'))
                 if not svg_reportlets and not html_reportlets:
-                    config.loggers.cli.error(
-                        f'No SVG or HTML reportlets found in {reportlets_dir_for_nireports}'
-                    )
-                    raise FileNotFoundError(
-                        f'No reportlets found in {reportlets_dir_for_nireports}')
+                    config.loggers.cli.error(f'No reportlets found in {reportlets_dir_for_nireports}')
+                    raise FileNotFoundError(f'No reportlets found in {reportlets_dir_for_nireports}')
 
                 config.loggers.cli.info(
                     f'Found {len(svg_reportlets)} SVG reportlets and '
                     f'{len(html_reportlets)} HTML reportlets in {reportlets_dir_for_nireports}'
                 )
 
-                # Log the actual reportlet filenames for debugging
+                # Log reportlet filenames
                 if svg_reportlets:
                     config.loggers.cli.info('SVG reportlets:')
                     for r in svg_reportlets:
@@ -412,17 +418,9 @@ def generate_reports(
                     for r in html_reportlets:
                         config.loggers.cli.info(f'  - {r.name}')
 
-                # Ensure the reportlets directory exists and is accessible
-                if not reportlets_dir_for_nireports.exists():
-                    config.loggers.cli.error(
-                        f'Reportlets directory does not exist: {reportlets_dir_for_nireports}'
-                    )
-                    raise FileNotFoundError(
-                        f'Reportlets directory not found: {reportlets_dir_for_nireports}')
-
                 # Create the report object with absolute paths
                 robj = SafeReport(
-                    out_dir=str(output_dir_path.absolute()),  # Use absolute path
+                    out_dir=str(output_dir_path.absolute()),
                     run_uuid=run_uuid,
                     bootstrap_file=current_bootstrap_file,
                     reportlets_dir=str(reportlets_dir_for_nireports.absolute()),
@@ -430,7 +428,7 @@ def generate_reports(
                     out_filename=html_report_filename,
                     subject=subject_id_for_report,
                     session=None,
-                    layout=layout,  # Use the main, pre-configured layout
+                    layout=layout,
                 )
 
                 # Generate the report
@@ -438,37 +436,15 @@ def generate_reports(
 
                 # Verify the report was generated
                 if not final_html_path.exists():
-                    config.loggers.cli.error(
-                        f'Report generation completed but file not found: {final_html_path}'
-                    )
+                    config.loggers.cli.error(f'Report file not found: {final_html_path}')
                     raise FileNotFoundError(f'Report file not found: {final_html_path}')
 
-                # Verify the report has content
-                if final_html_path.stat().st_size == 0:
-                    config.loggers.cli.error(
-                        f'Report file is empty: {final_html_path}'
-                    )
-                    raise RuntimeError(f'Generated report is empty: {final_html_path}')
-
-                # Verify the report contains the expected content
-                report_content = final_html_path.read_text()
-                if not report_content.strip():
-                    config.loggers.cli.error(
-                        f'Report file exists but has no content: {final_html_path}'
-                    )
-                    raise RuntimeError(f'Generated report has no content: {final_html_path}')
-
-                config.loggers.cli.info(
-                    f'Successfully generated report for {subject_label_with_prefix} at '
-                    f'{final_html_path}'
-                )
+                config.loggers.cli.info(f'Successfully generated report at {final_html_path}')
             except Exception as e:
-                err_msg = f'Report generation failed for {subject_label_with_prefix}: {e}'
-                config.loggers.cli.error(err_msg, exc_info=True)
+                config.loggers.cli.error(f'Report generation failed: {e}', exc_info=True)
                 report_errors.append(subject_label_with_prefix)
         except Exception as e:
-            err_msg = f'Report generation failed for {subject_label_with_prefix}: {e}'
-            config.loggers.cli.error(err_msg, exc_info=True)
+            config.loggers.cli.error(f'Report generation failed: {e}', exc_info=True)
             report_errors.append(subject_label_with_prefix)
 
         if n_ses > aggr_ses_reports_threshold:
@@ -495,7 +471,6 @@ def generate_reports(
                         f'Generating session report for {subject_label_with_prefix} '
                         f'session {session_label}...'
                     )
-                    config.loggers.cli.info(f'  Session HTML will be: {final_session_html_path}')
 
                     srobj = SafeReport(
                         out_dir=str(output_dir_path),
@@ -506,7 +481,7 @@ def generate_reports(
                         out_filename=session_html_report_filename,
                         subject=subject_id_for_report,
                         session=session_label,
-                        layout=layout, # Use the main, pre-configured layout
+                        layout=layout,
                     )
                     srobj.generate_report()
                     config.loggers.cli.info(
@@ -514,17 +489,15 @@ def generate_reports(
                         f'session {session_label} at {final_session_html_path}'
                     )
                 except Exception as e:
-                    err_msg = (
+                    config.loggers.cli.error(
                         f'Session report generation failed for {subject_label_with_prefix} '
                         f'session {session_label}: {e}'
                     )
-                    config.loggers.cli.error(err_msg, exc_info=True)
                     report_errors.append(f'{subject_label_with_prefix}_ses-{session_label}')
 
     if report_errors:
-        joined_error_subjects = ', '.join(report_errors)
         config.loggers.cli.error(
-            f'Report generation failed for the following subjects: {joined_error_subjects}'
+            f'Report generation failed for: {", ".join(report_errors)}'
         )
         return 1
     return 0
