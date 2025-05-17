@@ -140,10 +140,25 @@ def generate_reports(
                  # This might be too simplistic if multiple derivative paths were orig configured.
                 new_layout_derivatives = str(Path(output_dir).absolute())
                 config.loggers.cli.warning(
-                    f"Original layout derivatives format not recognized or empty. Using output_dir"
+                    f'Original layout derivatives format not recognized or empty. Using output_dir'
                     f" '{new_layout_derivatives}' as derivative for re-created layout."
                 )
 
+            # Add subject figures directory to derivatives if it exists
+            for subject_label_with_prefix in subject_list:
+                subject_figures_dir = \
+                    Path(output_dir).absolute() / subject_label_with_prefix / 'figures'
+                if subject_figures_dir.exists():
+                    if isinstance(new_layout_derivatives, dict):
+                        new_layout_derivatives['figures'] = str(subject_figures_dir)
+                    elif isinstance(new_layout_derivatives, list):
+                        new_layout_derivatives.append(str(subject_figures_dir))
+                    else:
+                        # If it's a string, convert to list and add
+                        new_layout_derivatives = [new_layout_derivatives, str(subject_figures_dir)]
+                    config.loggers.cli.info(
+                        f'Added subject figures directory to layout: {subject_figures_dir}'
+                    )
 
             layout = BIDSLayout(
                 root=str(original_root),
@@ -177,6 +192,18 @@ def generate_reports(
                 f'NCDLMUSE Version: {config.environment.version}'
             )
             continue
+
+        # Update reportlets_dir to point to the subject's figures directory
+        subject_figures_dir = output_dir_path / subject_label_with_prefix / 'figures'
+        if subject_figures_dir.exists():
+            reportlets_dir_for_nireports = subject_figures_dir
+            config.loggers.cli.info(
+                f'Using figures from: {reportlets_dir_for_nireports}'
+            )
+        else:
+            config.loggers.cli.warning(
+                f'Figures directory not found at: {subject_figures_dir}'
+            )
 
         n_ses = len(layout.get_sessions(subject=subject_id_for_report))
         aggr_ses_reports_threshold = getattr(config.execution, 'aggr_ses_reports', 3)

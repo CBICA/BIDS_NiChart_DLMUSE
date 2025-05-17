@@ -190,21 +190,17 @@ def write_derivative_description(bids_dir, deriv_dir):
 
     bids_dir = Path(bids_dir)
     deriv_dir = Path(deriv_dir)
-    ncdlmuse_config_filename = 'ncdlmuse_bids_config.json'
+
     desc = {
         'Name': 'BIDS NiChart DLMUSE: BIDS-Apps wrapper for NiChart DLMUSE',
         'BIDSVersion': '1.10.0',
-        'DatasetType': 'derivative',
+        'PipelineDescription': {
+            'Name': 'BIDS_NiChart_DLMUSE',
+            'Version': __version__,
+            'CodeURL': DOWNLOAD_URL
+        },
         'CodeURL': __url__,
         'HowToAcknowledge': 'Please cite our paper doi: 10.1016/j.neuroimage.2015.11.073',
-        'GeneratedBy': [
-            {
-                'Name': 'BIDS_NiChart_DLMUSE',
-                'Version': __version__,
-                'CodeURL': DOWNLOAD_URL,
-                'Configuration': ncdlmuse_config_filename
-            }
-        ]
     }
 
     # Keys that can only be set by environment
