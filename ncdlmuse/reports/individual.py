@@ -31,8 +31,9 @@ from ncdlmuse import config, data
 
 # Custom Report class to safely handle the layout object
 class SafeReport(NireportsReport):
-    def __init__(self, out_dir, run_uuid, layout=None, **kwargs):
+    def __init__(self, out_dir, run_uuid, layout=None, reportlets_dir=None, **kwargs):
         self._safe_layout = layout
+        self._reportlets_dir = reportlets_dir
         super().__init__(out_dir, run_uuid, **kwargs)
 
     def index(self, settings=None):
@@ -48,7 +49,13 @@ class SafeReport(NireportsReport):
                  # For now, this will likely cause issues in super().index(settings)
 
         # Log the reportlets directory and settings
-        config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self.reportlets_dir}')
+        if hasattr(self, '_reportlets_dir'):
+            config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self._reportlets_dir}')
+            # Set the reportlets_dir attribute that nireports expects
+            self.reportlets_dir = self._reportlets_dir
+        else:
+            config.loggers.cli.warning('SafeReport.index: No reportlets_dir provided')
+
         if settings:
             config.loggers.cli.info(f'SafeReport.index: settings = {settings}')
 

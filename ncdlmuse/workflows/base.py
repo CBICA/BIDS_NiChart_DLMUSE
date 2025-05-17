@@ -738,6 +738,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             dismiss_entities=['datatype'],  # Don't include datatype in path
             keep_dtype=False,  # Don't keep datatype in filename
             space=None,  # Don't include space in filename
+            create_dir=False,  # Don't create additional directories
         ),
         name='ds_report_summary',
         run_without_submitting=True,
@@ -769,6 +770,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             dismiss_entities=['datatype'],  # Don't include datatype in path
             keep_dtype=False,  # Don't keep datatype in filename
             space=None,  # Don't include space in filename
+            create_dir=False,  # Don't create additional directories
         ),
         name='ds_report_about',
         run_without_submitting=True,
@@ -804,6 +806,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             dismiss_entities=['datatype'],  # Don't include datatype in path
             keep_dtype=False,  # Don't keep datatype in filename
             space=None,  # Don't include space in filename
+            create_dir=False,  # Don't create additional directories
         ),
         name='ds_error_report',
         run_without_submitting=True,
@@ -829,6 +832,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             dismiss_entities=['datatype'],  # Don't include datatype in path
             keep_dtype=False,  # Don't keep datatype in filename
             space=None,  # Don't include space in filename
+            create_dir=False,  # Don't create additional directories
         ),
         name='ds_workflow_provenance_report',
         run_without_submitting=True,
