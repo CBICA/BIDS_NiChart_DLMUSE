@@ -20,11 +20,9 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-import json
-import re
+import shutil
 from pathlib import Path
 
-import yaml
 from bids.layout import BIDSLayout, BIDSLayoutIndexer
 from nireports.assembler.report import Report as NireportsReport
 
@@ -237,7 +235,6 @@ def generate_reports(
             figures_link = output_dir_path / 'figures'
             try:
                 if figures_link.exists():
-                    import shutil
                     shutil.rmtree(figures_link)
                 shutil.copytree(subject_figures_dir, figures_link)
                 config.loggers.cli.info(f'Copied figures directory to: {figures_link}')
@@ -269,7 +266,6 @@ def generate_reports(
                 # Clean up the copied directory if we created one
                 if figures_link != subject_figures_dir:
                     try:
-                        import shutil
                         shutil.rmtree(figures_link)
                         config.loggers.cli.info('Removed temporary figures directory')
                     except OSError as e:
