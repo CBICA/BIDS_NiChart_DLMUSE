@@ -29,7 +29,6 @@ from bids.layout import BIDSLayout, BIDSLayoutIndexer
 from nireports.assembler.report import Report as NireportsReport
 
 from ncdlmuse import config, data
-from ncdlmuse.utils.bids import write_derivative_description
 
 
 # Custom Report class to safely handle the layout object
@@ -66,31 +65,6 @@ def generate_reports(
     report_errors = []
 
     output_dir_path = Path(output_dir).absolute()
-
-    # Ensure dataset_description.json exists in the output directory
-    # output_dir is the ncdlmuse_dir, layout.root is the bids_dir
-    if layout and hasattr(layout, 'root') and layout.root:
-        bids_root_dir = Path(layout.root)
-        desc_path = output_dir_path / 'dataset_description.json'
-        if not desc_path.exists():
-            try:
-                config.loggers.cli.info(
-                    f'Attempting to write dataset_description.json to: {output_dir_path}'
-                )
-                write_derivative_description(bids_root_dir, output_dir_path)
-                config.loggers.cli.info(
-                    f'Successfully wrote dataset_description.json to: {output_dir_path}'
-                )
-            except Exception as e:
-                config.loggers.cli.warning(
-                    f'Could not write dataset_description.json to {output_dir_path}: {e}. '
-                    'This might cause issues if layout re-creation is needed.'
-                )
-    else:
-        config.loggers.cli.warning(
-            'BIDSLayout root not available, cannot ensure dataset_description.json exists '
-            'in the output directory prior to potential layout re-creation.'
-        )
 
     if not layout:
         config.loggers.cli.error(
@@ -146,19 +120,49 @@ def generate_reports(
 
             # Add subject figures directory to derivatives if it exists
             for subject_label_with_prefix in subject_list:
-                subject_figures_dir = \
-                    Path(output_dir).absolute() / subject_label_with_prefix / 'figures'
+                subject_id = subject_label_with_prefix.lstrip('sub-')
+                subject_figures_dir = Path(output_dir).absolute() / f'sub-{subject_id}' / 'figures'
                 if subject_figures_dir.exists():
                     if isinstance(new_layout_derivatives, dict):
-                        new_layout_derivatives['figures'] = str(subject_figures_dir)
+                        new_layout_derivatives[f'sub-{subject_id}'] = \
+                            str(subject_figures_dir.parent)
                     elif isinstance(new_layout_derivatives, list):
-                        new_layout_derivatives.append(str(subject_figures_dir))
+                        new_layout_derivatives.append(str(subject_figures_dir.parent))
                     else:
                         # If it's a string, convert to list and add
-                        new_layout_derivatives = [new_layout_derivatives, str(subject_figures_dir)]
+                        new_layout_derivatives = \
+                            [new_layout_derivatives, str(subject_figures_dir.parent)]
                     config.loggers.cli.info(
-                        f'Added subject figures directory to layout: {subject_figures_dir}'
+                        f'Added subject figures parent directory to layout: '
+                        f'{subject_figures_dir.parent}'
                     )
+
+            # If new_layout_derivatives is empty or still a string referring to out_dir
+            if (isinstance(new_layout_derivatives, dict) and not new_layout_derivatives) or \
+               (isinstance(new_layout_derivatives, str) and \
+                str(Path(output_dir).absolute()) in new_layout_derivatives):
+                # Add the output_dir explicitly to ensure it's included
+                subject_dirs = []
+                for subject_label_with_prefix in subject_list:
+                    subject_id = subject_label_with_prefix.lstrip('sub-')
+                    subject_dir = Path(output_dir).absolute() / f'sub-{subject_id}'
+                    if subject_dir.exists():
+                        subject_dirs.append(str(subject_dir))
+
+                # Add all subject directories found
+                if subject_dirs:
+                    if isinstance(new_layout_derivatives, dict):
+                        for i, dir_path in enumerate(subject_dirs):
+                            new_layout_derivatives[f'subdir_{i}'] = dir_path
+                    elif isinstance(new_layout_derivatives, list):
+                        new_layout_derivatives.extend(subject_dirs)
+                    else:
+                        # Convert to list
+                        new_layout_derivatives = [new_layout_derivatives] + subject_dirs
+
+                config.loggers.cli.info(
+                    f'Added subject directories to layout derivatives: {subject_dirs}'
+                )
 
             layout = BIDSLayout(
                 root=str(original_root),
@@ -194,7 +198,7 @@ def generate_reports(
             continue
 
         # Update reportlets_dir to point to the subject's figures directory
-        subject_figures_dir = output_dir_path / subject_label_with_prefix / 'figures'
+        subject_figures_dir = output_dir_path / f'sub-{subject_id_for_report}' / 'figures'
         if subject_figures_dir.exists():
             reportlets_dir_for_nireports = subject_figures_dir
             config.loggers.cli.info(
