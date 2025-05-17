@@ -36,7 +36,10 @@ class SummaryInterface(SimpleInterface):
 SUBJECT_TEMPLATE = """\
 \t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
+\t\t<li>Session ID: {session_id}</li>
 \t\t<li>Input T1w images: {n_t1s:d}</li>
+\t\t<li>Brain mask: {brain_mask_status}</li>
+\t\t<li>DLMUSE segmentation: {seg_status}</li>
 \t</ul>
 """
 
@@ -49,6 +52,9 @@ class _SummaryOutputSpec(TraitedSpec):
 class _SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     t1w = traits.List(File(exists=True), desc='T1w structural images')
     subject_id = traits.Str(desc='Subject ID')
+    session_id = traits.Str(desc='Session ID', mandatory=False)
+    brain_mask_file = File(exists=True, desc='Brain mask file', mandatory=False)
+    dlmuse_seg_file = File(exists=True, desc='DLMUSE segmentation file', mandatory=False)
 
 
 class _SubjectSummaryOutputSpec(_SummaryOutputSpec):
@@ -69,9 +75,14 @@ class SubjectSummary(SummaryInterface):
         return super()._run_interface(runtime)
 
     def _generate_segment(self):
+        brain_mask_status = "Available" if isdefined(self.inputs.brain_mask_file) else "Not available"
+        seg_status = "Available" if isdefined(self.inputs.dlmuse_seg_file) else "Not available"
         return SUBJECT_TEMPLATE.format(
             subject_id=self.inputs.subject_id,
+            session_id=getattr(self.inputs, 'session_id', 'N/A'),
             n_t1s=len(self.inputs.t1w),
+            brain_mask_status=brain_mask_status,
+            seg_status=seg_status,
         )
 
 

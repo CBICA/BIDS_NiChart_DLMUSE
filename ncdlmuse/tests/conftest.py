@@ -41,7 +41,7 @@ def _generate_bids_skeleton(base_path, subject_id='01', session_id=None):
     if not desc_filename.exists():
         dataset_desc = {
             'Name': 'NCDLMUSE Test Skeleton',
-            'BIDSVersion': '1.7.0',
+            'BIDSVersion': '1.10.0',
             'DatasetType': 'raw',
             'Authors': ['pytest']
         }

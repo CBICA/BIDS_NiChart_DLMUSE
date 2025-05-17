@@ -225,13 +225,13 @@ and manages overall execution settings.
 
                 # Define reportlets directory for this subject/session
                 # This will be passed to init_single_subject_wf
-                # The base reportlets_dir is <work_dir>/reportlets
-                reportlets_subj_anat_dir = (
-                    Path(work_dir) / 'reportlets' /
+                # The reportlets_dir should be in the derivatives directory
+                reportlets_dir = (
+                    Path(ncdlmuse_output_dir) /
                     f"sub-{entities.get('subject', 'UNKNOWN')}" /
-                    ('anat' if entities.get('session') is None
-                     else f"ses-{entities.get('session')}/anat")
+                    'figures'
                 )
+                reportlets_dir.mkdir(parents=True, exist_ok=True)
 
                 LOGGER.info(f'Creating workflow for {node_prefix} ({Path(t1w_file).name})')
                 subject_wf = init_single_subject_wf(
@@ -243,7 +243,7 @@ and manages overall execution settings.
                     io_spec=io_spec,
                     roi_list_tsv=roi_list_tsv,
                     derivatives_dir=ncdlmuse_output_dir,
-                    reportlets_dir=reportlets_subj_anat_dir,
+                    reportlets_dir=reportlets_dir,
                     device=device,
                     nthreads=nthreads,
                     work_dir=work_dir,
@@ -661,43 +661,28 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     current_reportlets_dir = Path(reportlets_dir)
     current_reportlets_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine session entity for filenames, using _current_t1w_entities passed to this wf
-    session_entity_str = \
-        f'_ses-{_current_t1w_entities["session"]}' if _current_t1w_entities.get('session') else ''
-
-    # Define base filenames for reportlets, using _current_t1w_entities for subject and session
-    brain_mask_report_filename = (
-        f'sub-{_current_t1w_entities["subject"]}{session_entity_str}_'
-        f'desc-brainMask_T1w.svg'
-    )
-    dlmuse_seg_report_filename = (
-        f'sub-{_current_t1w_entities["subject"]}{session_entity_str}_'
-        f'desc-dlmuseSegmentation_T1w.svg'
-    )
-
-    # --- Instead of using reportlets_dir/sub/ses/anat, use derivatives_dir/sub/figures ---
-    figures_dir = Path(derivatives_dir) / f'sub-{_current_t1w_entities["subject"]}' / 'figures'
-    figures_dir.mkdir(parents=True, exist_ok=True)
+    # Get base filename from original T1w file path
+    t1w_path = Path(_t1w_file_path)
+    base_filename = t1w_path.stem.replace('_T1w.nii.gz', '').replace('_T1w.nii', '')
 
     # Reportlet for Brain Mask
     plot_brain_mask = pe.Node(
         ROIsPlot(
             colors=['#FF0000'],  # Red contour
             levels=[0.5],
-            out_report=str(figures_dir / brain_mask_report_filename)
+            out_report=\
+                str(current_reportlets_dir.absolute() / f'{base_filename}_desc-brainMask_T1w.svg')
         ),
         name='plot_brain_mask',
         mem_gb=0.2 # Slightly more memory for plotting
     )
 
     # Reportlet for DLMUSE Segmentation
-    # For multi-label segmentations, ROIsPlot might pick one color or need specific config.
-    # If colors are important and specific, you might need to generate reportlets
-    # for key ROIs or use a different plotting tool/custom function.
-    # For now, let ROIsPlot decide colors.
     plot_dlmuse_seg = pe.Node(
         ROIsPlot(
-            out_report=str(figures_dir / dlmuse_seg_report_filename)
+            out_report=\
+                str(current_reportlets_dir.absolute() / \
+                    f'{base_filename}_desc-dlmuseSegmentation_T1w.svg')
         ),
         name='plot_dlmuse_seg',
         mem_gb=0.2 # Slightly more memory for plotting
@@ -722,26 +707,32 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     # 1. Subject Summary Report (Primary HTML Summary)
     subject_summary_node = pe.Node(
         SubjectSummary(
-            subject_id=_current_t1w_entities.get('subject', 'UNKNOWN')
-        ), # Use subject from the specific T1w entities
+            subject_id=_current_t1w_entities.get('subject', 'UNKNOWN'),
+            session_id=_current_t1w_entities.get('session', 'N/A'),
+        ),
         name='subject_summary_node',
         run_without_submitting=True
     )
+
+    # Connect inputs to subject summary
+    workflow.connect([
+        (bidssrc, subject_summary_node, [(('t1w', _make_list), 't1w')]),
+        (dlmuse_node, subject_summary_node, [
+            ('dlicv_mask', 'brain_mask_file'),
+            ('dlmuse_segmentation', 'dlmuse_seg_file')
+        ]),
+    ])
+
+    # Create DerivativesDataSink nodes for all HTML reports
     ds_report_summary = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(derivatives_dir),
-            desc='summary',
-            datatype='figures',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+        niu.Function(
+            input_names=['in_file', 'out_dir', 'filename'],
+            output_names=['out_file'],
+            function=_save_file_directly
         ),
         name='ds_report_summary',
         run_without_submitting=True,
     )
-    workflow.connect([
-        (bidssrc, subject_summary_node, [(('t1w', _make_list), 't1w')]),
-        (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
-        (bidssrc, ds_report_summary, [(('t1w', _select_first_from_list), 'source_file')])
-    ])
 
     # 2. Execution Provenance Report (About this NCDLMUSE run)
     exec_provenance_node = pe.Node(
@@ -754,108 +745,117 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         name='execution_provenance_node',
         run_without_submitting=True
     )
+
     ds_report_about = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(derivatives_dir),
-            desc='about',
-            datatype='figures',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+        niu.Function(
+            input_names=['in_file', 'out_dir', 'filename'],
+            output_names=['out_file'],
+            function=_save_file_directly
         ),
         name='ds_report_about',
         run_without_submitting=True,
     )
-    workflow.connect([
-        (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
-        (bidssrc, ds_report_about, [(('t1w', _select_first_from_list), 'source_file')])
-    ])
 
     # 3. Error Reportlet (Checks DLMUSE outputs)
     check_dlmuse_outputs_node = pe.Node(
         niu.Function(
             input_names=['segmentation_file', 'volumes_csv_file'],
             output_names=['error_messages_list'],
-            function=_check_dlmuse_outputs # Defined below
+            function=_check_dlmuse_outputs
         ),
         name='check_dlmuse_outputs_node',
         run_without_submitting=True
     )
-    workflow.connect(dlmuse_node, 'dlmuse_segmentation',
-                     check_dlmuse_outputs_node, 'segmentation_file')
-    workflow.connect(dlmuse_node, 'dlmuse_volumes',
-                     check_dlmuse_outputs_node, 'volumes_csv_file')
 
     error_report_node = pe.Node(
         ErrorReportlet(),
         name='error_report_node'
     )
-    workflow.connect(check_dlmuse_outputs_node, 'error_messages_list',
-                     error_report_node, 'error_messages')
 
     ds_error_report = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(derivatives_dir),
-            desc='processingErrors',
-            datatype='figures',
-            extension='.html',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+        niu.Function(
+            input_names=['in_file', 'out_dir', 'filename'],
+            output_names=['out_file'],
+            function=_save_file_directly
         ),
         name='ds_error_report',
         run_without_submitting=True,
     )
-    workflow.connect([
-        (bidssrc, ds_error_report, [(('t1w', _select_first_from_list), 'source_file')]),
-        (error_report_node, ds_error_report, [('out_report', 'in_file')]),
-    ])
 
     # 4. Workflow Provenance Reportlet (Software versions from JSON)
     workflow_provenance_report_node = pe.Node(
         WorkflowProvenanceReportlet(),
         name='workflow_provenance_report_node'
     )
-    workflow.connect(create_volumes_json_node, 'output_json_path',
-                     workflow_provenance_report_node, 'provenance_json_file')
 
     ds_workflow_provenance_report = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(derivatives_dir),
-            desc='workflowProvenance',
-            datatype='figures',
-            extension='.html',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
+        niu.Function(
+            input_names=['in_file', 'out_dir', 'filename'],
+            output_names=['out_file'],
+            function=_save_file_directly
         ),
         name='ds_workflow_provenance_report',
         run_without_submitting=True,
     )
+
+    # Create input nodes for the file paths
+    summary_input = pe.Node(
+        niu.IdentityInterface(fields=['out_dir', 'filename']),
+        name='summary_input'
+    )
+    summary_input.inputs.out_dir = str(current_reportlets_dir.absolute())
+    summary_input.inputs.filename = f'{base_filename}_desc-summary_T1w.html'
+
+    about_input = pe.Node(
+        niu.IdentityInterface(fields=['out_dir', 'filename']),
+        name='about_input'
+    )
+    about_input.inputs.out_dir = str(current_reportlets_dir.absolute())
+    about_input.inputs.filename = f'{base_filename}_desc-about_T1w.html'
+
+    errors_input = pe.Node(
+        niu.IdentityInterface(fields=['out_dir', 'filename']),
+        name='errors_input'
+    )
+    errors_input.inputs.out_dir = str(current_reportlets_dir.absolute())
+    errors_input.inputs.filename = f'{base_filename}_desc-processingErrors_T1w.html'
+
+    provenance_input = pe.Node(
+        niu.IdentityInterface(fields=['out_dir', 'filename']),
+        name='provenance_input'
+    )
+    provenance_input.inputs.out_dir = str(current_reportlets_dir.absolute())
+    provenance_input.inputs.filename = f'{base_filename}_desc-workflowProvenance_T1w.html'
+
+    # Connect all report nodes
     workflow.connect([
-        (bidssrc, ds_workflow_provenance_report, 
-         [(('t1w', _select_first_from_list), 'source_file')]),
-        (workflow_provenance_report_node, ds_workflow_provenance_report,
-         [('out_report', 'in_file')]),
+        # Subject Summary Report
+        (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
+        (summary_input, ds_report_summary, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+
+        # Execution Provenance Report
+        (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
+        (about_input, ds_report_about, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+
+        # Error Report
+        (dlmuse_node, check_dlmuse_outputs_node, [
+            ('dlmuse_segmentation', 'segmentation_file'),
+            ('dlmuse_volumes', 'volumes_csv_file')
+        ]),
+        (check_dlmuse_outputs_node, error_report_node, \
+            [('error_messages_list', 'error_messages')]),
+        (error_report_node, ds_error_report, [('out_report', 'in_file')]),
+        (errors_input, ds_error_report, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+
+        # Workflow Provenance Report
+        (create_volumes_json_node, workflow_provenance_report_node, \
+            [('output_json_path', 'provenance_json_file')]),
+        (workflow_provenance_report_node, ds_workflow_provenance_report, \
+            [('out_report', 'in_file')]),
+        (provenance_input, ds_workflow_provenance_report, \
+            [('out_dir', 'out_dir'), ('filename', 'filename')]),
     ])
 
-    # 5. Segmentation QC Reportlet (Volumes from JSON)
-    segmentation_qc_report_node = pe.Node(
-        SegmentationQCSummary(),
-        name='segmentation_qc_report_node'
-    )
-    workflow.connect(create_volumes_json_node, 'output_json_path',
-                     segmentation_qc_report_node, 'segmentation_qc_json_file')
-
-    ds_segmentation_qc_report = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(derivatives_dir),
-            desc='segmentationVolumes',
-            datatype='figures',
-            extension='.html',
-            dismiss_entities=['session'], # Ensure this goes to subject level regardless of session
-        ),
-        name='ds_segmentation_qc_report',
-        run_without_submitting=True,
-    )
-    workflow.connect([
-        (bidssrc, ds_segmentation_qc_report, [(('t1w', _select_first_from_list), 'source_file')]),
-        (segmentation_qc_report_node, ds_segmentation_qc_report, [('out_report', 'in_file')]),
-    ])
     # === END HTML Report Generation ===
 
     return clean_datasinks(workflow) # Apply clean_datasinks
@@ -1290,3 +1290,25 @@ def clean_datasinks(workflow: Workflow) -> Workflow:
             if hasattr(node.interface, 'out_path_base'):
                 node.interface.out_path_base = ''
     return workflow
+
+# --- Add helper function for direct file saving ---
+def _save_file_directly(in_file, out_dir, filename):
+    """Save a file directly to the specified directory with the given filename.
+    This bypasses the DerivativesDataSink's directory creation and path manipulation.
+    """
+    import os
+    import shutil
+    from pathlib import Path
+
+    # Create output directory if it doesn't exist
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    # Create output file path
+    out_file = out_path / filename
+
+    # Copy the file
+    shutil.copy2(in_file, out_file)
+
+    # Return the output file path
+    return str(out_file)
