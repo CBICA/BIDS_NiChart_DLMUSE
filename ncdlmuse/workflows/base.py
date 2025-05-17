@@ -732,6 +732,12 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             suffix='T1w',
             extension='.html',
             source_file=_t1w_file_path,  # Use original T1w file to maintain entities
+            out_path_base='',  # Ensure no additional path components
+            check_hdr=False,  # Skip header check for HTML files
+            compress=False,  # Don't compress HTML files
+            dismiss_entities=['datatype'],  # Don't include datatype in path
+            keep_dtype=False,  # Don't keep datatype in filename
+            space=None,  # Don't include space in filename
         ),
         name='ds_report_summary',
         run_without_submitting=True,
@@ -757,6 +763,12 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             suffix='T1w',
             extension='.html',
             source_file=_t1w_file_path,  # Use original T1w file to maintain entities
+            out_path_base='',  # Ensure no additional path components
+            check_hdr=False,  # Skip header check for HTML files
+            compress=False,  # Don't compress HTML files
+            dismiss_entities=['datatype'],  # Don't include datatype in path
+            keep_dtype=False,  # Don't keep datatype in filename
+            space=None,  # Don't include space in filename
         ),
         name='ds_report_about',
         run_without_submitting=True,
@@ -786,6 +798,12 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             suffix='T1w',
             extension='.html',
             source_file=_t1w_file_path,  # Use original T1w file to maintain entities
+            out_path_base='',  # Ensure no additional path components
+            check_hdr=False,  # Skip header check for HTML files
+            compress=False,  # Don't compress HTML files
+            dismiss_entities=['datatype'],  # Don't include datatype in path
+            keep_dtype=False,  # Don't keep datatype in filename
+            space=None,  # Don't include space in filename
         ),
         name='ds_error_report',
         run_without_submitting=True,
@@ -805,6 +823,12 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             suffix='T1w',
             extension='.html',
             source_file=_t1w_file_path,  # Use original T1w file to maintain entities
+            out_path_base='',  # Ensure no additional path components
+            check_hdr=False,  # Skip header check for HTML files
+            compress=False,  # Don't compress HTML files
+            dismiss_entities=['datatype'],  # Don't include datatype in path
+            keep_dtype=False,  # Don't keep datatype in filename
+            space=None,  # Don't include space in filename
         ),
         name='ds_workflow_provenance_report',
         run_without_submitting=True,

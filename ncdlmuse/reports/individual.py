@@ -46,7 +46,37 @@ class SafeReport(NireportsReport):
                  config.loggers.cli.error('No BIDSLayout available for SafeReport.index.')
                  # Potentially raise an error or try to create a default one, though risky.
                  # For now, this will likely cause issues in super().index(settings)
-        return super().index(settings)
+
+        # Log the reportlets directory and settings
+        config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self.reportlets_dir}')
+        if settings:
+            config.loggers.cli.info(f'SafeReport.index: settings = {settings}')
+
+        # Call parent's index method
+        result = super().index(settings)
+
+        # Log the reportlets that were found
+        if hasattr(self, 'reportlets'):
+            config.loggers.cli.info(f'SafeReport.index: Found {len(self.reportlets)} reportlets')
+            for r in self.reportlets:
+                config.loggers.cli.info(f'  - {r}')
+        else:
+            config.loggers.cli.warning(
+                'SafeReport.index: No reportlets attribute found after indexing')
+
+        return result
+
+    def generate_report(self):
+        """Override generate_report to add more logging."""
+        config.loggers.cli.info('SafeReport.generate_report: Starting report generation')
+        config.loggers.cli.info(
+            f'SafeReport.generate_report: reportlets_dir = {self.reportlets_dir}')
+
+        # Call parent's generate_report method
+        result = super().generate_report()
+
+        config.loggers.cli.info('SafeReport.generate_report: Finished report generation')
+        return result
 
 
 def generate_reports(
@@ -231,41 +261,77 @@ def generate_reports(
                     f'  Bootstrap file for nireports: {current_bootstrap_file}')
 
             try:
-                # Ensure reportlets_dir is absolute and exists
-                reportlets_dir_abs = Path(reportlets_dir_for_nireports).absolute()
-                if not reportlets_dir_abs.exists():
-                    config.loggers.cli.error(
-                        f'Reportlets directory does not exist: {reportlets_dir_abs}'
-                    )
-                    raise FileNotFoundError(
-                        f'Reportlets directory not found: {reportlets_dir_abs}')
-
                 # List reportlets to verify they exist
-                svg_reportlets = list(reportlets_dir_abs.glob('*.svg'))
-                html_reportlets = list(reportlets_dir_abs.glob('*.html'))
+                svg_reportlets = list(reportlets_dir_for_nireports.glob('*.svg'))
+                html_reportlets = list(reportlets_dir_for_nireports.glob('*.html'))
                 if not svg_reportlets and not html_reportlets:
                     config.loggers.cli.error(
-                        f'No SVG or HTML reportlets found in {reportlets_dir_abs}'
+                        f'No SVG or HTML reportlets found in {reportlets_dir_for_nireports}'
                     )
-                    raise FileNotFoundError(f'No reportlets found in {reportlets_dir_abs}')
+                    raise FileNotFoundError(
+                        f'No reportlets found in {reportlets_dir_for_nireports}')
 
                 config.loggers.cli.info(
                     f'Found {len(svg_reportlets)} SVG reportlets and '
-                    f'{len(html_reportlets)} HTML reportlets in {reportlets_dir_abs}'
+                    f'{len(html_reportlets)} HTML reportlets in {reportlets_dir_for_nireports}'
                 )
 
+                # Log the actual reportlet filenames for debugging
+                if svg_reportlets:
+                    config.loggers.cli.info('SVG reportlets:')
+                    for r in svg_reportlets:
+                        config.loggers.cli.info(f'  - {r.name}')
+                if html_reportlets:
+                    config.loggers.cli.info('HTML reportlets:')
+                    for r in html_reportlets:
+                        config.loggers.cli.info(f'  - {r.name}')
+
+                # Ensure the reportlets directory exists and is accessible
+                if not reportlets_dir_for_nireports.exists():
+                    config.loggers.cli.error(
+                        f'Reportlets directory does not exist: {reportlets_dir_for_nireports}'
+                    )
+                    raise FileNotFoundError(
+                        f'Reportlets directory not found: {reportlets_dir_for_nireports}')
+
+                # Create the report object with absolute paths
                 robj = SafeReport(
-                    out_dir=str(output_dir_path), # Where the html_report_filename is saved
+                    out_dir=str(output_dir_path.absolute()),  # Use absolute path
                     run_uuid=run_uuid,
                     bootstrap_file=current_bootstrap_file,
-                    reportlets_dir=str(reportlets_dir_abs), # Use absolute path
+                    reportlets_dir=str(reportlets_dir_for_nireports.absolute()),
                     plugins=None,
                     out_filename=html_report_filename,
                     subject=subject_id_for_report,
                     session=None,
-                    layout=layout, # Use the main, pre-configured layout
+                    layout=layout,  # Use the main, pre-configured layout
                 )
+
+                # Generate the report
                 robj.generate_report()
+
+                # Verify the report was generated
+                if not final_html_path.exists():
+                    config.loggers.cli.error(
+                        f'Report generation completed but file not found: {final_html_path}'
+                    )
+                    raise FileNotFoundError(f'Report file not found: {final_html_path}')
+
+                # Verify the report has content
+                if final_html_path.stat().st_size == 0:
+                    config.loggers.cli.error(
+                        f'Report file is empty: {final_html_path}'
+                    )
+                    raise RuntimeError(f'Generated report is empty: {final_html_path}')
+
+                # Verify the report contains the expected content
+                report_content = final_html_path.read_text()
+                if not report_content.strip():
+                    config.loggers.cli.error(
+                        f'Report file exists but has no content: {final_html_path}'
+                    )
+                    raise RuntimeError(f'Generated report has no content: {final_html_path}')
+
                 config.loggers.cli.info(
                     f'Successfully generated report for {subject_label_with_prefix} at '
                     f'{final_html_path}'
