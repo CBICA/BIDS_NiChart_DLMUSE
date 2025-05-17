@@ -155,6 +155,15 @@ class SafeReport(NireportsReport):
         instance_vars = vars(self)
         config.loggers.cli.info(f'Available attributes: {list(instance_vars.keys())}')
 
+        # Get subject from available attributes - subject is part of initialization params
+        subject_id = 'Unknown'
+        if hasattr(self, 'subject'):
+            subject_id = str(self.subject)
+        elif hasattr(self, 'metadata') and isinstance(self.metadata, dict):
+            subject_id = str(self.metadata.get('subject', 'Unknown'))
+
+        config.loggers.cli.info(f'Using subject ID: {subject_id}')
+
         # Find the output directory attribute - use a fallback approach
         output_dir_attr = None
         possible_attrs = ['output_dir', 'out_dir', '_output_dir', '_out_dir']
@@ -281,7 +290,7 @@ class SafeReport(NireportsReport):
         # Create final HTML
         html_content = html_template
         html_content = html_content.replace(
-            '{{subject}}', str(self.metadata.get('subject', 'Unknown')))
+            '{{subject}}', subject_id)
         html_content = html_content.replace(
             '{{summary}}', summary_html or 'No summary available')
         html_content = html_content.replace(
