@@ -225,13 +225,13 @@ and manages overall execution settings.
 
                 # Define reportlets directory for this subject/session
                 # This will be passed to init_single_subject_wf
-                # The base reportlets_dir is <work_dir>/reportlets
-                reportlets_subj_anat_dir = (
-                    Path(work_dir) / 'reportlets' /
+                # The reportlets_dir should be in the derivatives directory
+                reportlets_dir = (
+                    Path(ncdlmuse_output_dir) /
                     f"sub-{entities.get('subject', 'UNKNOWN')}" /
-                    ('anat' if entities.get('session') is None
-                     else f"ses-{entities.get('session')}/anat")
+                    'figures'
                 )
+                reportlets_dir.mkdir(parents=True, exist_ok=True)
 
                 LOGGER.info(f'Creating workflow for {node_prefix} ({Path(t1w_file).name})')
                 subject_wf = init_single_subject_wf(
@@ -243,7 +243,7 @@ and manages overall execution settings.
                     io_spec=io_spec,
                     roi_list_tsv=roi_list_tsv,
                     derivatives_dir=ncdlmuse_output_dir,
-                    reportlets_dir=reportlets_subj_anat_dir,
+                    reportlets_dir=reportlets_dir,
                     device=device,
                     nthreads=nthreads,
                     work_dir=work_dir,
@@ -661,10 +661,6 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     current_reportlets_dir = Path(reportlets_dir)
     current_reportlets_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- Instead of using reportlets_dir/sub/ses/anat, use derivatives_dir/sub/figures ---
-    figures_dir = Path(derivatives_dir) / f'sub-{_current_t1w_entities["subject"]}' / 'figures'
-    figures_dir.mkdir(parents=True, exist_ok=True)
-
     # Get base filename from original T1w file path
     t1w_path = Path(_t1w_file_path)
     base_filename = t1w_path.stem.replace('_T1w.nii.gz', '').replace('_T1w.nii', '')
@@ -674,7 +670,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         ROIsPlot(
             colors=['#FF0000'],  # Red contour
             levels=[0.5],
-            out_report=str(figures_dir / f'{base_filename}_desc-brainMask_T1w.svg')
+            out_report=str(current_reportlets_dir / f'{base_filename}_desc-brainMask_T1w.svg')
         ),
         name='plot_brain_mask',
         mem_gb=0.2 # Slightly more memory for plotting
@@ -683,7 +679,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     # Reportlet for DLMUSE Segmentation
     plot_dlmuse_seg = pe.Node(
         ROIsPlot(
-            out_report=str(figures_dir / f'{base_filename}_desc-dlmuseSegmentation_T1w.svg')
+            out_report=str(current_reportlets_dir / f'{base_filename}_desc-dlmuseSegmentation_T1w.svg')
         ),
         name='plot_dlmuse_seg',
         mem_gb=0.2 # Slightly more memory for plotting
