@@ -670,7 +670,8 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         ROIsPlot(
             colors=['#FF0000'],  # Red contour
             levels=[0.5],
-            out_report=str(current_reportlets_dir / f'{base_filename}_desc-brainMask_T1w.svg')
+            out_report=\
+                str(current_reportlets_dir.absolute() / f'{base_filename}_desc-brainMask_T1w.svg')
         ),
         name='plot_brain_mask',
         mem_gb=0.2 # Slightly more memory for plotting
@@ -679,7 +680,9 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     # Reportlet for DLMUSE Segmentation
     plot_dlmuse_seg = pe.Node(
         ROIsPlot(
-            out_report=str(current_reportlets_dir / f'{base_filename}_desc-dlmuseSegmentation_T1w.svg')
+            out_report=\
+                str(current_reportlets_dir.absolute() / \
+                    f'{base_filename}_desc-dlmuseSegmentation_T1w.svg')
         ),
         name='plot_dlmuse_seg',
         mem_gb=0.2 # Slightly more memory for plotting
@@ -723,7 +726,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     # Create DerivativesDataSink nodes for all HTML reports
     ds_report_summary = pe.Node(
         DerivativesDataSink(
-            base_directory=str(derivatives_dir),
+            base_directory=str(current_reportlets_dir.absolute()),
             desc='summary',
             datatype='figures',
             suffix='T1w',
@@ -748,7 +751,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     ds_report_about = pe.Node(
         DerivativesDataSink(
-            base_directory=str(derivatives_dir),
+            base_directory=str(current_reportlets_dir.absolute()),
             desc='about',
             datatype='figures',
             suffix='T1w',
@@ -777,7 +780,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     ds_error_report = pe.Node(
         DerivativesDataSink(
-            base_directory=str(derivatives_dir),
+            base_directory=str(current_reportlets_dir.absolute()),
             desc='processingErrors',
             datatype='figures',
             suffix='T1w',
@@ -796,7 +799,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     ds_workflow_provenance_report = pe.Node(
         DerivativesDataSink(
-            base_directory=str(derivatives_dir),
+            base_directory=str(current_reportlets_dir.absolute()),
             desc='workflowProvenance',
             datatype='figures',
             suffix='T1w',

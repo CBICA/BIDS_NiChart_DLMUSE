@@ -231,11 +231,34 @@ def generate_reports(
                     f'  Bootstrap file for nireports: {current_bootstrap_file}')
 
             try:
+                # Ensure reportlets_dir is absolute and exists
+                reportlets_dir_abs = Path(reportlets_dir_for_nireports).absolute()
+                if not reportlets_dir_abs.exists():
+                    config.loggers.cli.error(
+                        f'Reportlets directory does not exist: {reportlets_dir_abs}'
+                    )
+                    raise FileNotFoundError(
+                        f'Reportlets directory not found: {reportlets_dir_abs}')
+
+                # List reportlets to verify they exist
+                svg_reportlets = list(reportlets_dir_abs.glob('*.svg'))
+                html_reportlets = list(reportlets_dir_abs.glob('*.html'))
+                if not svg_reportlets and not html_reportlets:
+                    config.loggers.cli.error(
+                        f'No SVG or HTML reportlets found in {reportlets_dir_abs}'
+                    )
+                    raise FileNotFoundError(f'No reportlets found in {reportlets_dir_abs}')
+
+                config.loggers.cli.info(
+                    f'Found {len(svg_reportlets)} SVG reportlets and '
+                    f'{len(html_reportlets)} HTML reportlets in {reportlets_dir_abs}'
+                )
+
                 robj = SafeReport(
                     out_dir=str(output_dir_path), # Where the html_report_filename is saved
                     run_uuid=run_uuid,
                     bootstrap_file=current_bootstrap_file,
-                    reportlets_dir=str(reportlets_dir_for_nireports), # Use direct path to figures
+                    reportlets_dir=str(reportlets_dir_abs), # Use absolute path
                     plugins=None,
                     out_filename=html_report_filename,
                     subject=subject_id_for_report,
