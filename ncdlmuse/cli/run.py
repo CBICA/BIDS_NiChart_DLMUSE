@@ -70,9 +70,6 @@ def main():
     def ensure_dataset_description():
         """Create dataset_description.json if it doesn't exist."""
         try:
-            config.loggers.cli.info(
-                f'Ensuring dataset_description.json exists in: {config.execution.ncdlmuse_dir}'
-            )
             # Check if file already exists to avoid unnecessary recreation
             desc_path = Path(config.execution.ncdlmuse_dir) / 'dataset_description.json'
             if not desc_path.exists():
@@ -80,9 +77,6 @@ def main():
                     config.execution.bids_dir,
                     config.execution.ncdlmuse_dir
                 )
-                config.loggers.cli.info('Successfully created dataset_description.json')
-            else:
-                config.loggers.cli.info('dataset_description.json already exists, continuing')
             return True
         except Exception as e:
             config.loggers.cli.warning(f'Error creating dataset_description.json: {e}')
