@@ -378,8 +378,8 @@ def main():
         config.loggers.cli.warning('Skipping report generation due to workflow execution failure.')
 
     config.loggers.cli.info(
-        f'Execution finished. Exit code: {retcode}'
-        f" ({config.execution.participant_label or 'group'})"
+        f'BIDS_NiChart_DLMUSE finished. Exit code: {retcode}'
+        f" (participant id: {config.execution.participant_label or 'group'})"
     )
     return retcode
 

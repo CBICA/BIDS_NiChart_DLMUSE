@@ -399,7 +399,7 @@ class SafeReport(NireportsReport):
             if reportlet_path.suffix.lower() == '.svg':
 
                 content = \
-                    (f'<img src="figures/{reportlet_path.name}" '
+                    (f'<img src="sub-{subject_id}/figures/{reportlet_path.name}" '
                      f'alt="{reportlet_path.stem}" '
                      f'class="img-fluid">')
 
