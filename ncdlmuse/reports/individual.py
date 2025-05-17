@@ -154,9 +154,15 @@ class SafeReport(NireportsReport):
                 # Fallback to current working directory
                 output_dir = Path(os.getcwd())
 
+        # Get subject ID from the reportlets directory path if not set
         subject_id = "Unknown"
         if hasattr(self, 'subject'):
             subject_id = self.subject
+        elif hasattr(self, '_reportlets_dir'):
+            # Try to extract subject ID from reportlets directory path
+            reportlets_path = Path(self._reportlets_dir)
+            if 'sub-' in str(reportlets_path):
+                subject_id = reportlets_path.parent.name.replace('sub-', '')
 
         # Prepare the HTML template
         template_str = """<!DOCTYPE html>
@@ -397,9 +403,13 @@ class SafeReport(NireportsReport):
         for reportlet in self.reportlets:
             reportlet_path = Path(reportlet)
             if reportlet_path.suffix.lower() == '.svg':
+                # Extract subject ID from the SVG filename if it contains one
+                svg_subject_id = subject_id
+                if 'sub-' in reportlet_path.name:
+                    svg_subject_id = reportlet_path.name.split('_')[0].replace('sub-', '')
 
                 content = \
-                    (f'<img src="sub-{subject_id}/figures/{reportlet_path.name}" '
+                    (f'<img src="sub-{svg_subject_id}/figures/{reportlet_path.name}" '
                      f'alt="{reportlet_path.stem}" '
                      f'class="img-fluid">')
 
