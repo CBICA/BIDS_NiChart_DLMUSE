@@ -41,6 +41,53 @@ class SafeReport(NireportsReport):
 
         super().__init__(out_dir, run_uuid, **kwargs)
 
+    def _load_reportlet(self, reportlet_path):
+        """Override _load_reportlet to properly load and include reportlets."""
+        import shutil
+        from pathlib import Path
+
+        config.loggers.cli.info(f'Loading reportlet: {reportlet_path}')
+
+        # Convert to Path object if it's a string
+        reportlet_path = Path(reportlet_path)
+
+        # Check if file exists
+        if not reportlet_path.exists():
+            config.loggers.cli.error(f'Reportlet not found: {reportlet_path}')
+            return None
+
+        # For HTML files, read and return the content
+        if reportlet_path.suffix == '.html':
+            try:
+                content = reportlet_path.read_text()
+                config.loggers.cli.info(f'Successfully loaded HTML reportlet: {reportlet_path}')
+                return content
+            except Exception as e:
+                config.loggers.cli.error(f'Error reading HTML reportlet {reportlet_path}: {e}')
+                return None
+
+        # For SVG files, copy to the output directory and return the relative path
+        elif reportlet_path.suffix == '.svg':
+            try:
+                # Create a figures directory in the output directory if it doesn't exist
+                figures_dir = Path(self.out_dir) / 'figures'
+                figures_dir.mkdir(exist_ok=True)
+
+                # Copy the SVG file to the figures directory
+                target_path = figures_dir / reportlet_path.name
+                shutil.copy2(reportlet_path, target_path)
+
+                # Return the relative path for inclusion in the HTML
+                rel_path = f'figures/{reportlet_path.name}'
+                config.loggers.cli.info(f'Successfully copied SVG reportlet to: {rel_path}')
+                return rel_path
+            except Exception as e:
+                config.loggers.cli.error(f'Error copying SVG reportlet {reportlet_path}: {e}')
+                return None
+
+        config.loggers.cli.warning(f'Unsupported reportlet type: {reportlet_path}')
+        return None
+
     def index(self, settings=None):
         from pathlib import Path
 
@@ -50,17 +97,14 @@ class SafeReport(NireportsReport):
             config.loggers.cli.warning('SafeReport.index called without a _safe_layout.')
             if settings and 'layout' in settings and isinstance(settings['layout'], BIDSLayout):
                  self.layout = settings['layout']
-            elif self.layout is None: # If self.layout wasn't set by super().__init__ either
+            elif self.layout is None:
                  config.loggers.cli.error('No BIDSLayout available for SafeReport.index.')
-                 # Potentially raise an error or try to create a default one, though risky.
-                 # For now, this will likely cause issues in super().index(settings)
 
         # Log the reportlets directory and settings
         if hasattr(self, 'reportlets_dir'):
             config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self.reportlets_dir}')
         elif hasattr(self, '_reportlets_dir'):
             config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self._reportlets_dir}')
-            # Set the reportlets_dir attribute that nireports expects
             self.reportlets_dir = self._reportlets_dir
         else:
             config.loggers.cli.warning('SafeReport.index: No reportlets_dir provided')
@@ -130,7 +174,7 @@ class SafeReport(NireportsReport):
                 'SafeReport.index: No reportlets attribute found after indexing')
             # If the parent didn't set reportlets, use our manual finding
             if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
-                config.loggers.cli.info("Setting manually found reportlets")
+                config.loggers.cli.info('Setting manually found reportlets')
                 self.reportlets = self._manual_reportlets
 
         return result
