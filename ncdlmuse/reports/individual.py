@@ -232,22 +232,50 @@ def generate_reports(
                 config.loggers.cli.info(
                     f'  Bootstrap file for nireports: {current_bootstrap_file}')
 
-            robj = SafeReport(
-                out_dir=str(output_dir_path), # Where the html_report_filename is saved
-                run_uuid=run_uuid,
-                bootstrap_file=current_bootstrap_file,
-                reportlets_dir=str(reportlets_dir_for_nireports),
-                plugins=None,
-                out_filename=html_report_filename,
-                subject=subject_id_for_report,
-                session=None,
-                layout=layout, # Use the main, pre-configured layout
-            )
-            robj.generate_report()
-            config.loggers.cli.info(
-                f'Successfully generated report for {subject_label_with_prefix} at '
-                f'{final_html_path}'
-            )
+            # For Singularity/Linux, we'll use a direct copy approach instead of symlinks
+            # This is more reliable in containerized environments
+            figures_link = output_dir_path / 'figures'
+            try:
+                if figures_link.exists():
+                    import shutil
+                    shutil.rmtree(figures_link)
+                shutil.copytree(subject_figures_dir, figures_link)
+                config.loggers.cli.info(f'Copied figures directory to: {figures_link}')
+            except (OSError, shutil.Error) as e:
+                config.loggers.cli.warning(
+                    f'Could not copy figures directory: {e}. Using direct path instead.'
+                )
+                # Fall back to using the direct path
+                figures_link = subject_figures_dir
+
+            try:
+                robj = SafeReport(
+                    out_dir=str(output_dir_path), # Where the html_report_filename is saved
+                    run_uuid=run_uuid,
+                    bootstrap_file=current_bootstrap_file,
+                    reportlets_dir=str(figures_link), # Use either the copied dir or direct path
+                    plugins=None,
+                    out_filename=html_report_filename,
+                    subject=subject_id_for_report,
+                    session=None,
+                    layout=layout, # Use the main, pre-configured layout
+                )
+                robj.generate_report()
+                config.loggers.cli.info(
+                    f'Successfully generated report for {subject_label_with_prefix} at '
+                    f'{final_html_path}'
+                )
+            finally:
+                # Clean up the copied directory if we created one
+                if figures_link != subject_figures_dir:
+                    try:
+                        import shutil
+                        shutil.rmtree(figures_link)
+                        config.loggers.cli.info('Removed temporary figures directory')
+                    except OSError as e:
+                        config.loggers.cli.warning(
+                            f'Could not remove temporary figures directory: {e}'
+                            )
         except Exception as e:
             err_msg = f'Report generation failed for {subject_label_with_prefix}: {e}'
             config.loggers.cli.error(err_msg, exc_info=True)
