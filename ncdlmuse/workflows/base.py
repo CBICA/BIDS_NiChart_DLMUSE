@@ -725,20 +725,10 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # Create DerivativesDataSink nodes for all HTML reports
     ds_report_summary = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(current_reportlets_dir.absolute()),
-            desc='summary',
-            datatype='figures',
-            suffix='T1w',
-            extension='.html',
-            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
-            out_path_base='',  # Ensure no additional path components
-            check_hdr=False,  # Skip header check for HTML files
-            compress=False,  # Don't compress HTML files
-            dismiss_entities=['datatype'],  # Don't include datatype in path
-            keep_dtype=False,  # Don't keep datatype in filename
-            space=None,  # Don't include space in filename
-            create_dir=False,  # Don't create additional directories
+        niu.Function(
+            input_names=['in_file', 'out_dir', 'filename'],
+            output_names=['out_file'],
+            function=_save_file_directly
         ),
         name='ds_report_summary',
         run_without_submitting=True,
@@ -757,20 +747,10 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     )
 
     ds_report_about = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(current_reportlets_dir.absolute()),
-            desc='about',
-            datatype='figures',
-            suffix='T1w',
-            extension='.html',
-            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
-            out_path_base='',  # Ensure no additional path components
-            check_hdr=False,  # Skip header check for HTML files
-            compress=False,  # Don't compress HTML files
-            dismiss_entities=['datatype'],  # Don't include datatype in path
-            keep_dtype=False,  # Don't keep datatype in filename
-            space=None,  # Don't include space in filename
-            create_dir=False,  # Don't create additional directories
+        niu.Function(
+            input_names=['in_file', 'out_dir', 'filename'],
+            output_names=['out_file'],
+            function=_save_file_directly
         ),
         name='ds_report_about',
         run_without_submitting=True,
@@ -793,20 +773,10 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     )
 
     ds_error_report = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(current_reportlets_dir.absolute()),
-            desc='processingErrors',
-            datatype='figures',
-            suffix='T1w',
-            extension='.html',
-            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
-            out_path_base='',  # Ensure no additional path components
-            check_hdr=False,  # Skip header check for HTML files
-            compress=False,  # Don't compress HTML files
-            dismiss_entities=['datatype'],  # Don't include datatype in path
-            keep_dtype=False,  # Don't keep datatype in filename
-            space=None,  # Don't include space in filename
-            create_dir=False,  # Don't create additional directories
+        niu.Function(
+            input_names=['in_file', 'out_dir', 'filename'],
+            output_names=['out_file'],
+            function=_save_file_directly
         ),
         name='ds_error_report',
         run_without_submitting=True,
@@ -819,20 +789,10 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     )
 
     ds_workflow_provenance_report = pe.Node(
-        DerivativesDataSink(
-            base_directory=str(current_reportlets_dir.absolute()),
-            desc='workflowProvenance',
-            datatype='figures',
-            suffix='T1w',
-            extension='.html',
-            source_file=_t1w_file_path,  # Use original T1w file to maintain entities
-            out_path_base='',  # Ensure no additional path components
-            check_hdr=False,  # Skip header check for HTML files
-            compress=False,  # Don't compress HTML files
-            dismiss_entities=['datatype'],  # Don't include datatype in path
-            keep_dtype=False,  # Don't keep datatype in filename
-            space=None,  # Don't include space in filename
-            create_dir=False,  # Don't create additional directories
+        niu.Function(
+            input_names=['in_file', 'out_dir', 'filename'],
+            output_names=['out_file'],
+            function=_save_file_directly
         ),
         name='ds_workflow_provenance_report',
         run_without_submitting=True,
@@ -842,9 +802,17 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     workflow.connect([
         # Subject Summary Report
         (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
+        (niu.IdentityInterface(fields=['out_dir', 'filename'], 
+                               out_dir=str(current_reportlets_dir.absolute()),
+                               filename=f'{base_filename}_desc-summary_T1w.html'), 
+         ds_report_summary, [('out_dir', 'out_dir'), ('filename', 'filename')]),
 
         # Execution Provenance Report
         (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
+        (niu.IdentityInterface(fields=['out_dir', 'filename'], 
+                               out_dir=str(current_reportlets_dir.absolute()),
+                               filename=f'{base_filename}_desc-about_T1w.html'), 
+         ds_report_about, [('out_dir', 'out_dir'), ('filename', 'filename')]),
 
         # Error Report
         (dlmuse_node, check_dlmuse_outputs_node, [
@@ -853,10 +821,18 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         ]),
         (check_dlmuse_outputs_node, error_report_node, [('error_messages_list', 'error_messages')]),
         (error_report_node, ds_error_report, [('out_report', 'in_file')]),
+        (niu.IdentityInterface(fields=['out_dir', 'filename'], 
+                               out_dir=str(current_reportlets_dir.absolute()),
+                               filename=f'{base_filename}_desc-processingErrors_T1w.html'), 
+         ds_error_report, [('out_dir', 'out_dir'), ('filename', 'filename')]),
 
         # Workflow Provenance Report
         (create_volumes_json_node, workflow_provenance_report_node, [('output_json_path', 'provenance_json_file')]),
         (workflow_provenance_report_node, ds_workflow_provenance_report, [('out_report', 'in_file')]),
+        (niu.IdentityInterface(fields=['out_dir', 'filename'], 
+                               out_dir=str(current_reportlets_dir.absolute()),
+                               filename=f'{base_filename}_desc-workflowProvenance_T1w.html'), 
+         ds_workflow_provenance_report, [('out_dir', 'out_dir'), ('filename', 'filename')]),
     ])
 
     # === END HTML Report Generation ===
@@ -1293,3 +1269,25 @@ def clean_datasinks(workflow: Workflow) -> Workflow:
             if hasattr(node.interface, 'out_path_base'):
                 node.interface.out_path_base = ''
     return workflow
+
+# --- Add helper function for direct file saving ---
+def _save_file_directly(in_file, out_dir, filename):
+    """Save a file directly to the specified directory with the given filename.
+    This bypasses the DerivativesDataSink's directory creation and path manipulation.
+    """
+    import os
+    import shutil
+    from pathlib import Path
+
+    # Create output directory if it doesn't exist
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    # Create output file path
+    out_file = out_path / filename
+
+    # Copy the file
+    shutil.copy2(in_file, out_file)
+
+    # Return the output file path
+    return str(out_file)

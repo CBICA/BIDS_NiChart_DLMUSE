@@ -34,9 +34,16 @@ class SafeReport(NireportsReport):
     def __init__(self, out_dir, run_uuid, layout=None, reportlets_dir=None, **kwargs):
         self._safe_layout = layout
         self._reportlets_dir = reportlets_dir
+
+        # Set reportlets_dir first as the parent class needs it during initialization
+        if reportlets_dir:
+            kwargs['reportlets_dir'] = str(reportlets_dir)
+
         super().__init__(out_dir, run_uuid, **kwargs)
 
     def index(self, settings=None):
+        from pathlib import Path
+
         if hasattr(self, '_safe_layout') and self._safe_layout is not None:
             self.layout = self._safe_layout
         else:
@@ -49,7 +56,9 @@ class SafeReport(NireportsReport):
                  # For now, this will likely cause issues in super().index(settings)
 
         # Log the reportlets directory and settings
-        if hasattr(self, '_reportlets_dir'):
+        if hasattr(self, 'reportlets_dir'):
+            config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self.reportlets_dir}')
+        elif hasattr(self, '_reportlets_dir'):
             config.loggers.cli.info(f'SafeReport.index: reportlets_dir = {self._reportlets_dir}')
             # Set the reportlets_dir attribute that nireports expects
             self.reportlets_dir = self._reportlets_dir
@@ -59,8 +68,57 @@ class SafeReport(NireportsReport):
         if settings:
             config.loggers.cli.info(f'SafeReport.index: settings = {settings}')
 
+        # We'll do a manual check for reportlets to ensure they're found
+        reportlets = []
+        reportlets_path = Path(self.reportlets_dir)
+
+        # Check that settings has the expected structure
+        if settings and 'sections' in settings:
+            for section in settings['sections']:
+                if 'reportlets' in section:
+                    for reportlet_spec in section['reportlets']:
+                        if 'bids' in reportlet_spec:
+                            # Match files based on BIDS entities
+                            bids_spec = reportlet_spec['bids']
+                            extension = bids_spec.get('extension')
+                            desc = bids_spec.get('desc')
+
+                            # Handle different extension formats
+                            if extension:
+                                if isinstance(extension, list):
+                                    extensions = extension
+                                else:
+                                    extensions = [extension]
+                            else:
+                                extensions = ['.svg', '.html']
+
+                            # Look for matching files
+                            for ext in extensions:
+                                # Use glob to find matching files
+                                if desc:
+                                    pattern = f'*{desc}*{ext}'
+                                else:
+                                    pattern = f'*{ext}'
+
+                                matches = list(reportlets_path.glob(pattern))
+                                for match in matches:
+                                    reportlet_path = str(match)
+                                    config.loggers.cli.info(f'Found reportlet: {reportlet_path}')
+                                    reportlets.append(reportlet_path)
+
+        # Store the manually found reportlets
+        self._manual_reportlets = reportlets
+        config.loggers.cli.info(f'Manually found {len(reportlets)} reportlets')
+
         # Call parent's index method
-        result = super().index(settings)
+        try:
+            result = super().index(settings)
+        except Exception as e:
+            config.loggers.cli.error(f'Error in parent index method: {e}')
+            if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
+                config.loggers.cli.info('Using manually found reportlets')
+                self.reportlets = self._manual_reportlets
+            result = None
 
         # Log the reportlets that were found
         if hasattr(self, 'reportlets'):
@@ -70,14 +128,31 @@ class SafeReport(NireportsReport):
         else:
             config.loggers.cli.warning(
                 'SafeReport.index: No reportlets attribute found after indexing')
+            # If the parent didn't set reportlets, use our manual finding
+            if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
+                config.loggers.cli.info("Setting manually found reportlets")
+                self.reportlets = self._manual_reportlets
 
         return result
 
     def generate_report(self):
-        """Override generate_report to add more logging."""
+        """Override generate_report to add more logging and ensure reportlets are used."""
         config.loggers.cli.info('SafeReport.generate_report: Starting report generation')
         config.loggers.cli.info(
             f'SafeReport.generate_report: reportlets_dir = {self.reportlets_dir}')
+
+        # Make sure we have reportlets to use
+        if not hasattr(self, 'reportlets') or not self.reportlets:
+            if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
+                config.loggers.cli.info('Using manually found reportlets for report generation')
+                self.reportlets = self._manual_reportlets
+
+        # Log what reportlets we'll use
+        if hasattr(self, 'reportlets'):
+            config.loggers.cli.info(
+                f'Using {len(self.reportlets)} reportlets for report generation:')
+            for r in self.reportlets:
+                config.loggers.cli.info(f'  - {r}')
 
         # Call parent's generate_report method
         result = super().generate_report()
