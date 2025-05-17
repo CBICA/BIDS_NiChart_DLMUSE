@@ -62,27 +62,12 @@ class SafeReport(NireportsReport):
                 return None
         elif reportlet_path.suffix == '.svg':
             try:
-                # Find the output directory attribute dynamically
-                output_dir = None
-                possible_attrs = ['output_dir', 'out_dir', '_output_dir', '_out_dir']
-                for attr in possible_attrs:
-                    if hasattr(self, attr):
-                        output_dir = Path(getattr(self, attr))
-                        break
-
-                if not output_dir:
-                    # Fallback to current working directory
-                    output_dir = Path(os.getcwd())
-
-                figures_dir = output_dir / 'figures'
-                figures_dir.mkdir(exist_ok=True)
-
-                target_path = figures_dir / reportlet_path.name
-                shutil.copy2(reportlet_path, target_path)
-
-                return f'figures/{reportlet_path.name}'
+                # We should NOT create a new figures directory in the output dir
+                # The SVG files should already be in the subject's figures directory
+                # Just return the relative path to the SVG file
+                return str(reportlet_path.name)
             except Exception as e:
-                config.loggers.cli.error(f'Error copying SVG reportlet: {e}')
+                config.loggers.cli.error(f'Error handling SVG reportlet: {e}')
                 return None
 
         return None
@@ -137,10 +122,8 @@ class SafeReport(NireportsReport):
         return self.reportlets
 
     def generate_report(self):
-        """Generate HTML report with all reportlets."""
+        """Let parent class handle the report generation."""
         import inspect
-        import os
-        from importlib import resources
         from pathlib import Path
 
         if not hasattr(self, 'reportlets') or not self.reportlets:
@@ -151,166 +134,21 @@ class SafeReport(NireportsReport):
             config.loggers.cli.error('No reportlets available for report generation')
             return None
 
-        # Debug: Print all instance variables to find the correct attribute name
+        # Debug: Print all instance variables
         instance_vars = vars(self)
         config.loggers.cli.info(f'Available attributes: {list(instance_vars.keys())}')
 
-        # Get subject from available attributes - subject is part of initialization params
-        subject_id = 'Unknown'
-        if hasattr(self, 'subject'):
-            subject_id = str(self.subject)
-        elif hasattr(self, 'metadata') and isinstance(self.metadata, dict):
-            subject_id = str(self.metadata.get('subject', 'Unknown'))
-
-        config.loggers.cli.info(f'Using subject ID: {subject_id}')
-
-        # Find the output directory attribute - use a fallback approach
-        output_dir_attr = None
-        possible_attrs = ['output_dir', 'out_dir', '_output_dir', '_out_dir']
-        for attr in possible_attrs:
-            if hasattr(self, attr):
-                output_dir_attr = attr
-                config.loggers.cli.info(f'Found output directory attribute: {attr}')
-                break
-
-        if not output_dir_attr:
-            # Get from initialization parameters if available
-            parent_init_params = inspect.signature(super(SafeReport, self).__init__).parameters
-            if 'out_dir' in parent_init_params and hasattr(self, 'out_filename'):
-                # If we have out_filename but not out_dir, infer from parent_dir
-                config.loggers.cli.info('Using cwd as output directory')
-                output_dir = Path(os.getcwd())
-            else:
-                config.loggers.cli.error('Cannot determine output directory attribute')
-                return None
-        else:
-            output_dir = Path(getattr(self, output_dir_attr))
-
-        # Get template from nireports
-        template_path = None
+        # We'll let the parent class handle the report generation
+        # This will use the template from nireports properly
         try:
-            import nireports
-            template_candidates = [
-                Path(nireports.__file__).parent / 'assembler' / 'data' / 'report.tpl',
-                Path(nireports.__file__).parent / 'data' / 'reports' / 'report.tpl'
-            ]
-
-            for candidate in template_candidates:
-                if candidate.exists():
-                    template_path = candidate
-                    break
-
-            if not template_path:
-                with resources.as_file(data.load('report.tpl')) as resource_path:
-                    template_path = resource_path
+            # Call parent generate_report method which handles template rendering
+            result = super().generate_report()
+            if result:
+                config.loggers.cli.info(f'Report successfully generated at: {result}')
+            return result
         except Exception as e:
-            config.loggers.cli.error(f'Error finding template: {e}')
-
-        # Minimal template as fallback
-        html_template = """<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Visual report for participant '{{subject}}' - NCDLMUSE</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .section { margin-bottom: 30px; }
-        h1, h2 { color: #333; }
-        img { max-width: 100%; }
-    </style>
-</head>
-<body>
-    <h1>Visual report for participant '{{subject}}' - NCDLMUSE</h1>
-    <div class="section"><h2>Summary</h2>{{summary}}</div>
-    <div class="section"><h2>Anatomical Processing</h2>{{anatomical}}</div>
-    <div class="section"><h2>Processing Details</h2>{{processing}}</div>
-    <div class="section"><h2>About</h2>{{about}}</div>
-</body>
-</html>
-"""
-
-        if template_path and Path(template_path).exists():
-            try:
-                html_template = Path(template_path).read_text()
-            except Exception:
-                pass
-
-        # Prepare output directory
-        figures_dir = output_dir / 'figures'
-        figures_dir.mkdir(parents=True, exist_ok=True)
-
-        # Organize reportlets
-        svg_paths = []
-        summary_html = ''
-        anatomical_html = ''
-        processing_html = ''
-        about_html = ''
-
-        for reportlet in self.reportlets:
-            reportlet_path = Path(reportlet)
-            if reportlet_path.suffix.lower() == '.svg':
-                target_path = figures_dir / reportlet_path.name
-                try:
-                    shutil.copy2(reportlet_path, target_path)
-                    svg_paths.append(f'figures/{reportlet_path.name}')
-                except Exception:
-                    pass
-            elif reportlet_path.suffix.lower() == '.html':
-                try:
-                    content = reportlet_path.read_text()
-                    filename = reportlet_path.name
-                    if 'summary' in filename.lower():
-                        summary_html += content + '\n'
-                    elif 'brain' in filename.lower() or 'segmentation' in filename.lower():
-                        anatomical_html += content + '\n'
-                    elif 'workflow' in filename.lower() or 'error' in filename.lower():
-                        processing_html += content + '\n'
-                    elif 'about' in filename.lower():
-                        about_html += content + '\n'
-                    else:
-                        processing_html += content + '\n'
-                except Exception:
-                    pass
-
-        # Add SVG references to anatomical section
-        for svg_path in svg_paths:
-            if 'brain' in svg_path.lower() or 'mask' in svg_path.lower():
-                anatomical_html += (
-                    f'<h3>Brain Mask</h3>\n'
-                    f'<div><img src="{svg_path}" alt="Brain Mask"></div>\n'
-                )
-            elif 'segmentation' in svg_path.lower() or 'dlmuse' in svg_path.lower():
-                anatomical_html += (
-                    f'<h3>DLMUSE Segmentation</h3>\n'
-                    f'<div><img src="{svg_path}" alt="DLMUSE Segmentation"></div>\n'
-                )
-            else:
-                anatomical_html += f'<div><img src="{svg_path}" alt="Figure"></div>\n'
-
-        # Create final HTML
-        html_content = html_template
-        html_content = html_content.replace(
-            '{{subject}}', subject_id)
-        html_content = html_content.replace(
-            '{{summary}}', summary_html or 'No summary available')
-        html_content = html_content.replace(
-            '{{anatomical}}', anatomical_html or 'No anatomical details available')
-        html_content = html_content.replace(
-            '{{processing}}', processing_html or 'No processing details available')
-        html_content = html_content.replace(
-            '{{about}}', about_html or 'No about information available')
-
-        # Write final HTML
-        output_file = output_dir / f'{self.out_filename}'
-        try:
-            with open(output_file, 'w') as f:
-                f.write(html_content)
-            config.loggers.cli.info(f'Successfully wrote report to: {output_file}')
-        except Exception as e:
-            config.loggers.cli.error(f'Error writing report: {e}')
+            config.loggers.cli.error(f'Error in parent generate_report method: {e}')
             return None
-
-        return output_file
 
 
 def generate_reports(
