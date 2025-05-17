@@ -42,8 +42,8 @@ class SafeReport(NireportsReport):
 
     def _load_reportlet(self, reportlet_path):
         """Override _load_reportlet to properly load and include reportlets."""
-        import shutil
         import os
+        import shutil
         from pathlib import Path
 
         config.loggers.cli.info(f'Loading reportlet: {reportlet_path}')
@@ -122,9 +122,17 @@ class SafeReport(NireportsReport):
         return self.reportlets
 
     def generate_report(self):
-        """Let parent class handle the report generation."""
-        import inspect
+        """Generate a custom HTML report using the reportlets."""
+        import os
+        import re
+        import shutil
+        import time
         from pathlib import Path
+
+        import jinja2
+        import yaml
+        from nipype.utils.filemanip import copyfile
+        from pkg_resources import resource_filename as pkgrf
 
         if not hasattr(self, 'reportlets') or not self.reportlets:
             if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
@@ -138,16 +146,394 @@ class SafeReport(NireportsReport):
         instance_vars = vars(self)
         config.loggers.cli.info(f'Available attributes: {list(instance_vars.keys())}')
 
-        # We'll let the parent class handle the report generation
-        # This will use the template from nireports properly
+        # Determine output directory and subject ID
+        output_dir = None
+        for attr in ['output_dir', 'out_dir']:
+            if hasattr(self, attr):
+                output_dir = Path(getattr(self, attr))
+                break
+
+        if not output_dir:
+            if hasattr(self, 'out_filename'):
+                # Use parent dir of out_filename if available
+                output_file = self.out_filename
+                output_dir = Path(os.path.dirname(output_file))
+            else:
+                # Fallback to current working directory
+                output_dir = Path(os.getcwd())
+
+        subject_id = "Unknown"
+        if hasattr(self, 'subject'):
+            subject_id = self.subject
+
+        # Load the reports-spec.yml to understand the expected structure
+        reports_spec = None
         try:
-            # Call parent generate_report method which handles template rendering
-            result = super().generate_report()
-            if result:
-                config.loggers.cli.info(f'Report successfully generated at: {result}')
-            return result
+            if hasattr(self, 'bootstrap_file') and self.bootstrap_file:
+                with open(self.bootstrap_file, 'r') as f:
+                    reports_spec = yaml.safe_load(f)
+            else:
+                # Try to load from data
+                spec_path = data.load('reports-spec.yml')
+                if os.path.exists(spec_path):
+                    with open(spec_path, 'r') as f:
+                        reports_spec = yaml.safe_load(f)
         except Exception as e:
-            config.loggers.cli.error(f'Error in parent generate_report method: {e}')
+            config.loggers.cli.warning(f'Failed to load reports-spec.yml: {e}')
+
+        # Prepare the HTML template
+        template_str = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="NiReports: https://www.nipreps.org/" />
+    <title>NCDLMUSE: sub-{{subject_id}}</title>
+    <link rel="stylesheet" 
+          href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+          integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z"
+          crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+            integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"
+            integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN"
+            crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
+            integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
+            crossorigin="anonymous"></script>
+    <style type="text/css">
+    @import url(https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic);
+    body {
+        font-family: 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        background-color: #fff;
+    }
+    a {
+        color: #258AAF;
+    }
+    .navbar {
+        border-bottom: 1px solid #ddd;
+        margin-bottom: 20px;
+    }
+    .navbar-brand {
+        margin-right: 20px;
+        margin-left: 10px;
+    }
+    .nipreps-brand {
+        color: #3A3A3B;
+        font-weight: 400;
+    }
+    .nipreps-version {
+        color: #999999;
+        font-size: small;
+    }
+    .ncdlmuse-brand {
+        color: #258AAF;
+        font-weight: 500;
+    }
+    .ncdlmuse-version {
+        color: #bbbbbb;
+        font-size: small;
+    }
+    .navbar-toggle {
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+    h1.section-heading {
+        padding-top: 20px;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        color: #258AAF;
+    }
+    h2.sub-heading {
+        padding-top: 10px;
+        margin-top: 10px;
+        color: #5C9EBA;
+    }
+    .reportlet-title {
+        font-weight: 500;
+        color: #333;
+        margin-top: 25px;
+    }
+    .reportlet-description {
+        font-style: italic;
+        color: #666;
+        margin-bottom: 10px;
+    }
+    .reportlet-container {
+        margin-bottom: 30px;
+    }
+    .reportlet img {
+        max-width: 100%;
+        margin: 10px 0;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        border-radius: 4px;
+    }
+    .boiler-html h1 {
+        font-size: 1.6em;
+        margin-bottom: 16px;
+    }
+    .boiler-html h2 {
+        font-size: 1.4em;
+        margin-bottom: 12px;
+    }
+    .boiler-html h3 {
+        font-size: 1.2em;
+        margin-bottom: 8px;
+    }
+    .boiler-html p {
+        margin-bottom: 14px;
+    }
+    footer {
+        margin-top: 30px;
+        border-top: 1px solid #ddd;
+        padding-top: 10px;
+        font-size: small;
+        color: #999999;
+    }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <span class="nipreps-brand">NiPreps</span>
+                <span class="nipreps-version">{{version}}</span> |
+                <span class="ncdlmuse-brand">NCDLMUSE</span>
+                <span class="ncdlmuse-version">{{version}}</span>
+            </a>
+            <button class="navbar-toggler" type="button" 
+                    data-toggle="collapse" 
+                    data-target="#navbarSupportedContent" 
+                    aria-controls="navbarSupportedContent" 
+                    aria-expanded="false" 
+                    aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav ml-auto">
+                    {% for section in sections %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#{{section.id}}">{{section.name}}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 100px;">
+        <h1>NCDLMUSE Report: sub-{{subject_id}}</h1>
+
+        <noscript>
+            <div class="alert alert-danger">
+                The navigation menu at the top uses JavaScript.
+                Without it this report might not work as expected.
+            </div>
+        </noscript>
+
+        {% for section in sections %}
+        <section id="{{section.id}}">
+            <h1 class="section-heading">{{section.name}}</h1>
+            {% for reportlet in section.reportlets %}
+                <div class="reportlet-container">
+                    {% if reportlet.title %}
+                    <h2 class="reportlet-title">{{ reportlet.title }}</h2>
+                    {% endif %}
+                    {% if reportlet.description %}
+                    <p class="reportlet-description">{{ reportlet.description }}</p>
+                    {% endif %}
+                    <div class="reportlet">
+                        {{ reportlet.content | safe }}
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+        {% endfor %}
+
+        <footer>
+            <div class="row">
+                <div class="col-md-12">
+                    <p>Report generated by nipreps/NCDLMUSE v{{ version }} on {{ timestamp }}.</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script type="text/javascript">
+    $(function() {
+        $('a[href*="#"]:not([href="#"])').click(function() {
+            if (location.pathname.replace(/^\//,'') == this.pathname.replace(/^\//,'') && 
+                location.hostname == this.hostname) {
+                var target = $(this.hash);
+                target = target.length ? target : $('[name=' + this.hash.slice(1) +']');
+                if (target.length) {
+                    $('html, body').animate({
+                        scrollTop: target.offset().top - 100
+                    }, 500);
+                    return false;
+                }
+            }
+        });
+    });
+    </script>
+</body>
+</html>
+"""
+
+        # Get version from config
+        version = getattr(config.environment, 'version', 'unknown')
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Process reportlets and organize by section
+        sections = []
+
+        # Add Summary section
+        summary_section = {
+            'id': 'summary',
+            'name': 'Summary',
+            'reportlets': []
+        }
+
+        # Add Anatomical section
+        anatomical_section = {
+            'id': 'anatomical',
+            'name': 'Anatomical Processing',
+            'reportlets': []
+        }
+
+        # Add Processing Details section
+        processing_section = {
+            'id': 'processing',
+            'name': 'Processing Details',
+            'reportlets': []
+        }
+
+        # Add About section
+        about_section = {
+            'id': 'about',
+            'name': 'About',
+            'reportlets': []
+        }
+
+        # Copy SVG files to figures directory in output_dir if needed
+        figures_dir = output_dir / 'figures'
+        if not figures_dir.exists():
+            try:
+                figures_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                config.loggers.cli.warning(f'Could not create figures directory: {e}')
+
+        # Process each reportlet and add to appropriate section
+        for reportlet in self.reportlets:
+            reportlet_path = Path(reportlet)
+            if reportlet_path.suffix.lower() == '.svg':
+                # Copy SVG to output dir figures if it's not there already
+                if not (figures_dir / reportlet_path.name).exists():
+                    try:
+                        shutil.copy2(reportlet_path, figures_dir / reportlet_path.name)
+                    except Exception as e:
+                        config.loggers.cli.warning(
+                            f'Could not copy SVG: {e}'
+                        )
+
+                content = \
+                    (f'<img src="figures/{reportlet_path.name}" '
+                     f'alt="{reportlet_path.stem}" '
+                     f'class="img-fluid">')
+
+                # Determine which section based on filename
+                if ('brain' in reportlet_path.name.lower() or
+                    'mask' in reportlet_path.name.lower()):
+                    anatomical_section['reportlets'].append({
+                        'title': 'Brain Mask',
+                        'description': 'Brain mask overlaid on the T1w image.',
+                        'content': content
+                    })
+                elif ('segmentation' in reportlet_path.name.lower() or
+                      'dlmuse' in reportlet_path.name.lower()):
+                    anatomical_section['reportlets'].append({
+                        'title': 'DLMUSE Segmentation',
+                        'description': 'DLMUSE segmentation overlaid on the T1w image.',
+                        'content': content
+                    })
+                else:
+                    anatomical_section['reportlets'].append({
+                        'title': reportlet_path.stem,
+                        'content': content
+                    })
+
+            elif reportlet_path.suffix.lower() == '.html':
+                try:
+                    content = reportlet_path.read_text()
+
+                    # Determine section based on filename
+                    if 'summary' in reportlet_path.name.lower():
+                        summary_section['reportlets'].append({
+                            'title': 'Processing Summary',
+                            'content': content
+                        })
+                    elif 'workflowprovenance' in reportlet_path.name.lower():
+                        processing_section['reportlets'].append({
+                            'title': 'Workflow Provenance',
+                            'description': 'Information about the workflow execution.',
+                            'content': content
+                        })
+                    elif 'processingerrors' in reportlet_path.name.lower():
+                        processing_section['reportlets'].append({
+                            'title': 'Processing Errors',
+                            'description': 'Errors and warnings encountered during processing.',
+                            'content': content
+                        })
+                    elif 'about' in reportlet_path.name.lower():
+                        about_section['reportlets'].append({
+                            'title': 'About this Run',
+                            'content': content
+                        })
+                    else:
+                        processing_section['reportlets'].append({
+                            'title': reportlet_path.stem,
+                            'content': content
+                        })
+                except Exception as e:
+                    config.loggers.cli.warning(
+                        f'Error reading HTML reportlet {reportlet_path}: {e}'
+                    )
+
+        # Add non-empty sections to the list
+        if summary_section['reportlets']:
+            sections.append(summary_section)
+        if anatomical_section['reportlets']:
+            sections.append(anatomical_section)
+        if processing_section['reportlets']:
+            sections.append(processing_section)
+        if about_section['reportlets']:
+            sections.append(about_section)
+
+        # Render the template
+        try:
+            template = jinja2.Template(template_str)
+            html_content = template.render(
+                subject_id=subject_id,
+                sections=sections,
+                version=version,
+                timestamp=timestamp
+            )
+
+            # Write the HTML file
+            output_file = output_dir / self.out_filename
+            with open(output_file, 'w') as f:
+                f.write(html_content)
+
+            config.loggers.cli.info(
+                f'Successfully generated report at {output_file}'
+            )
+            return str(output_file)
+        except Exception as e:
+            config.loggers.cli.error(
+                f'Error generating HTML report: {e}'
+            )
             return None
 
 
