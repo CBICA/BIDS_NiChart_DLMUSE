@@ -455,32 +455,39 @@ class execution(_Config):
             cls._layout = None
             return
 
+        # If group analysis, skip BIDS layout initialization entirely.
+        if cls.analysis_level == 'group':
+            cls._layout = None
+            return
+
+        # --- The following is for non-group (participant) analysis only ---
         import re
 
-        from bids.layout import BIDSLayout
-        from bids.layout.index import BIDSLayoutIndexer
+        import bids.exceptions
+        from bids.layout import BIDSLayout, BIDSLayoutIndexer
 
-        # Safely determine the BIDS database path
-        default_bids_db_in_workdir = None
+        # Determine and set the BIDS database path for BIDSLayout
+        cls._db_path = None  # Initialize class attribute _db_path
+        default_db_in_workdir = None
         if cls.work_dir and hasattr(cls, 'run_uuid') and cls.run_uuid:
-            # Only construct this path if work_dir and run_uuid are available
             try:
-                default_bids_db_in_workdir = Path(cls.work_dir) / cls.run_uuid / 'bids_db'
-            except TypeError: # Should be caught by the if, but as a safeguard
-                default_bids_db_in_workdir = None
+                default_db_in_workdir = Path(cls.work_dir) / cls.run_uuid / 'bids_db'
+            except TypeError:
+                pass # default_db_in_workdir remains None
 
-        # cls._db_path assignment (assuming the attribute is named _db_path)
-        # The original line was: _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / 'bids_db')
-        if hasattr(cls, '_db_path'): # Check if the attribute exists
-            cls._db_path = cls.bids_database_dir or default_bids_db_in_workdir
-        elif hasattr(cls, 'db_path'): # Check for alternative common name
-            cls.db_path = cls.bids_database_dir or default_bids_db_in_workdir
-        else:
-            # If the exact attribute name is unknown, this part might need adjustment
-            # For now, let's assume it's _db_path and it's okay if it's not explicitly set here
-            # if no specific bids_database_dir is provided and work_dir is None.
-            # The main goal is to avoid the TypeError.
-            pass
+        if cls.bids_database_dir:
+            cls._db_path = Path(cls.bids_database_dir)
+        elif default_db_in_workdir:
+            cls._db_path = default_db_in_workdir
+            # Create the default database directory if it's going to be used
+            try:
+                cls._db_path.mkdir(exist_ok=True, parents=True)
+            except OSError as e:
+                print(f'WARNING: Could not create BIDS DB dir {cls._db_path}: '
+                      f'{e}', file=sys.stderr)
+                # Proceeding with cls._db_path as None if creation fails might be an option
+                # or let BIDSLayout handle it if the path is then unusable.
+                # For now, let's assume BIDSLayout will manage if path is None.
 
         # Setup the BIDSLayout
         try:
@@ -496,13 +503,16 @@ class execution(_Config):
             )
             cls._layout = BIDSLayout(
                 str(cls.bids_dir),
-                database_path=cls._db_path,
-                reset_database=bool(cls.bids_database_dir is None),
+                database_path=cls._db_path, # cls._db_path is now robustly defined or None
+                # Reset database if we are using an in-memory DB (cls._db_path is None)
+                # OR if using a default path (bids_database_dir is None and _db_path is not None)
+                reset_database=(cls._db_path is None) or \
+                               (cls.bids_database_dir is None and cls._db_path is not None),
                 indexer=indexer,
             )
             cls.bids_description_hash = cls._layout.description.__hash__()
 
-        except Exception as e:
+        except (bids.exceptions.PyBIDSException, OSError, ValueError, TypeError) as e:
             # Handle layout initialization errors
             print(f'ERROR: Could not index BIDS dataset: {e}', file=sys.stderr)
             cls._layout = None
