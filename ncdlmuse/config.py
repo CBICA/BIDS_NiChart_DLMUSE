@@ -455,13 +455,39 @@ class execution(_Config):
             cls._layout = None
             return
 
+        # If group analysis, skip BIDS layout initialization entirely.
+        if cls.analysis_level == 'group':
+            cls._layout = None
+            return
+
+        # --- The following is for non-group (participant) analysis only ---
         import re
 
-        from bids.layout import BIDSLayout
-        from bids.layout.index import BIDSLayoutIndexer
+        import bids.exceptions
+        from bids.layout import BIDSLayout, BIDSLayoutIndexer
 
-        _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / 'bids_db')
-        _db_path.mkdir(exist_ok=True, parents=True)
+        # Determine and set the BIDS database path for BIDSLayout
+        cls._db_path = None  # Initialize class attribute _db_path
+        default_db_in_workdir = None
+        if cls.work_dir and hasattr(cls, 'run_uuid') and cls.run_uuid:
+            try:
+                default_db_in_workdir = Path(cls.work_dir) / cls.run_uuid / 'bids_db'
+            except TypeError:
+                pass # default_db_in_workdir remains None
+
+        if cls.bids_database_dir:
+            cls._db_path = Path(cls.bids_database_dir)
+        elif default_db_in_workdir:
+            cls._db_path = default_db_in_workdir
+            # Create the default database directory if it's going to be used
+            try:
+                cls._db_path.mkdir(exist_ok=True, parents=True)
+            except OSError as e:
+                print(f'WARNING: Could not create BIDS DB dir {cls._db_path}: '
+                      f'{e}', file=sys.stderr)
+                # Proceeding with cls._db_path as None if creation fails might be an option
+                # or let BIDSLayout handle it if the path is then unusable.
+                # For now, let's assume BIDSLayout will manage if path is None.
 
         # Setup the BIDSLayout
         try:
@@ -477,13 +503,16 @@ class execution(_Config):
             )
             cls._layout = BIDSLayout(
                 str(cls.bids_dir),
-                database_path=_db_path,
-                reset_database=bool(cls.bids_database_dir is None),
+                database_path=cls._db_path, # cls._db_path is now robustly defined or None
+                # Reset database if we are using an in-memory DB (cls._db_path is None)
+                # OR if using a default path (bids_database_dir is None and _db_path is not None)
+                reset_database=(cls._db_path is None) or \
+                               (cls.bids_database_dir is None and cls._db_path is not None),
                 indexer=indexer,
             )
             cls.bids_description_hash = cls._layout.description.__hash__()
 
-        except Exception as e:
+        except (bids.exceptions.PyBIDSException, OSError, ValueError, TypeError) as e:
             # Handle layout initialization errors
             print(f'ERROR: Could not index BIDS dataset: {e}', file=sys.stderr)
             cls._layout = None
@@ -558,10 +587,22 @@ class loggers:
         """
         from nipype import config as ncfg
 
+        # Setup for cli logger
         if not cls.cli.hasHandlers():
-            _handler = logging.StreamHandler(stream=sys.stdout)
-            _handler.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
-            cls.cli.addHandler(_handler)
+            _handler_cli = logging.StreamHandler(stream=sys.stdout)
+            _handler_cli.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+            cls.cli.addHandler(_handler_cli)
+
+        # Ensure root logger (cls.default) has a console handler if none exist
+        # This is crucial for group mode where _setup_logging might be skipped.
+        if not cls.default.hasHandlers():
+            _handler_root_console = logging.StreamHandler(stream=sys.stdout)
+            _handler_root_console.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+            # Set handler level to the general execution log level
+            # The root logger's level will also be set below, this ensures the handler passes messages.
+            _handler_root_console.setLevel(execution.log_level)
+            cls.default.addHandler(_handler_root_console)
+
         cls.default.setLevel(execution.log_level)
         cls.cli.setLevel(execution.log_level)
         cls.interface.setLevel(execution.log_level)
