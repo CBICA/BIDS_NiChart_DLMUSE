@@ -587,10 +587,22 @@ class loggers:
         """
         from nipype import config as ncfg
 
+        # Setup for cli logger
         if not cls.cli.hasHandlers():
-            _handler = logging.StreamHandler(stream=sys.stdout)
-            _handler.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
-            cls.cli.addHandler(_handler)
+            _handler_cli = logging.StreamHandler(stream=sys.stdout)
+            _handler_cli.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+            cls.cli.addHandler(_handler_cli)
+
+        # Ensure root logger (cls.default) has a console handler if none exist
+        # This is crucial for group mode where _setup_logging might be skipped.
+        if not cls.default.hasHandlers():
+            _handler_root_console = logging.StreamHandler(stream=sys.stdout)
+            _handler_root_console.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+            # Set handler level to the general execution log level
+            # The root logger's level will also be set below, this ensures the handler passes messages.
+            _handler_root_console.setLevel(execution.log_level) 
+            cls.default.addHandler(_handler_root_console)
+
         cls.default.setLevel(execution.log_level)
         cls.cli.setLevel(execution.log_level)
         cls.interface.setLevel(execution.log_level)
