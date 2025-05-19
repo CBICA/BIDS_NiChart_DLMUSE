@@ -1,18 +1,18 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Command Line Interface Parser."""
 
-import glob
 import logging
 import logging.handlers
 import re
 import sys
-from pathlib import Path
 from argparse import Action
+from pathlib import Path
 
+import bids.exceptions
+import toml
 from packaging.version import Version
 
 from .. import config
-
 
 # --- Helper Functions & Classes ---
 
@@ -68,8 +68,8 @@ def _min_one(value, parser):
         value = int(value)
         if value < 1:
             raise parser.error("Argument can't be less than one.")
-    except (ValueError, TypeError):
-        raise parser.error(f'Argument must be an integer >= 1, got: {value}')
+    except (ValueError, TypeError) as e:
+        raise parser.error(f'Argument must be an integer >= 1, got: {value}') from e
     return value
 
 
@@ -85,8 +85,8 @@ def _to_gb(value):
 
     try:
         digits_float = float(digits)
-    except ValueError:
-         raise ValueError(f'Invalid numeric value for memory size: {digits}')
+    except ValueError as e:
+         raise ValueError(f'Invalid numeric value for memory size: {digits}') from e
 
     unit_char = units[0] if units else 'G'
     if unit_char not in scale:
@@ -142,15 +142,16 @@ def _bids_filter(value, parser):
         try:
             return loads(path.read_text(), object_hook=_filter_pybids_none_any)
         except JSONDecodeError as e:
-            raise parser.error(f'JSON syntax error in BIDS filter file: <{path}>. Error: {e}') from e
-        except Exception as e:
+            raise parser.error(
+                f'JSON syntax error in BIDS filter file: <{path}>. Error: {e}') from e
+        except OSError as e:
             raise parser.error(f'Could not read BIDS filter file: <{path}>. Error: {e}') from e
     elif isinstance(value, str):
         # Attempt to parse as JSON string directly
         try:
             return loads(value, object_hook=_filter_pybids_none_any)
-        except JSONDecodeError:
-            raise parser.error(f'Argument is not a valid path or JSON string: <{value}>.')
+        except JSONDecodeError as e:
+            raise parser.error(f'Argument is not a valid path or JSON string: <{value}>.') from e
     else:
         raise parser.error(f'Invalid BIDS filter value: <{value}>.')
 
@@ -466,17 +467,25 @@ def _build_parser():
         help='Initialize the random seed for the workflow for reproducibility.',
     )
 
+    # --- Inform about non-release version ---
+    if not is_release:
+        print(
+            f'INFO: You are using a non-release version of NCDLMUSE ({currentv}). '
+            'For stable production use, please consider using the latest release version.',
+            file=sys.stderr,
+        )
+
     # --- Check for Latest Version and Flags ---
     try:
         latest = check_latest()
         if latest is not None and currentv < latest:
             print(
                 f'WARNING: You are using ncdlmuse-{currentv}, '
-                f'and a newer version ({latest}) is available.\n'
+                f'and a newer version ({latest}) is available.\\n'
                 'Please check documentation for upgrade instructions.',
                 file=sys.stderr,
             )
-    except Exception as e:
+    except RuntimeError as e: # Changed from Exception
          print(f'WARNING: Could not check for latest version: {e}', file=sys.stderr)
 
     try:
@@ -489,7 +498,7 @@ def _build_parser():
                 'Severe flaws may be present. Usage is strongly discouraged.',
                 file=sys.stderr,
             )
-    except Exception as e:
+    except RuntimeError as e:
         print(
             f'WARNING: Could not check if version '
             f'{config.environment.version} is flagged: {e}',
@@ -505,7 +514,6 @@ def _build_parser():
 def parse_args(args=None, namespace=None):
     """Parse command line arguments and store settings in config module."""
     from nipype import config as nipype_config
-    from niworkflows.utils.misc import clean_directory # Use niworkflows cleaner if needed
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
@@ -518,7 +526,7 @@ def parse_args(args=None, namespace=None):
             skip = {'execution': ('run_uuid',)} if not opts.reports_only else {}
             config.load(opts.config_file, skip=skip, init=False)
             config.loggers.cli.info(f'Loaded previous configuration file {opts.config_file}')
-        except Exception as e:
+        except (OSError, toml.TomlDecodeError) as e:
             print(f'ERROR: Could not load config file "{opts.config_file}": {e}', file=sys.stderr)
 
     # 2. Set up run_uuid (either new or loaded) BEFORE applying CLI args
@@ -529,7 +537,7 @@ def parse_args(args=None, namespace=None):
     cli_vars = vars(opts)
     config.from_dict(cli_vars, init=False) # Use config's internal update mechanism
     config.execution.cmdline = sys.argv[:] # Store the full command line
-    
+
     # --- Explicitly map DLMUSE options ---
     # Ensure CLI args for DLMUSE are correctly mapped to workflow.dlmuse_* config
     # This overrides values loaded from file or defaults if CLI arg was provided
@@ -538,7 +546,8 @@ def parse_args(args=None, namespace=None):
     if cli_vars.get('model_folder') is not None:
         config.workflow.dlmuse_model_folder = cli_vars['model_folder']
     if cli_vars.get('dlmuse_derived_roi_mappings_file') is not None:
-        config.workflow.dlmuse_derived_roi_mappings_file = cli_vars['dlmuse_derived_roi_mappings_file']
+        config.workflow.dlmuse_derived_roi_mappings_file = \
+            cli_vars['dlmuse_derived_roi_mappings_file']
     if cli_vars.get('dlmuse_muse_roi_mappings_file') is not None:
         config.workflow.dlmuse_muse_roi_mappings_file = cli_vars['dlmuse_muse_roi_mappings_file']
     # Booleans are always present in cli_vars (True/False), so update directly
@@ -558,260 +567,252 @@ def parse_args(args=None, namespace=None):
     config.execution.ncdlmuse_dir = config.execution.output_dir
     config.execution.ncdlmuse_dir.mkdir(exist_ok=True, parents=True)
 
-    # Work Dir (resolve, create, handle default)
-    if config.execution.work_dir:
-        config.execution.work_dir = config.execution.work_dir.resolve()
-    else:
-        # Default work_dir inside output_dir
-        config.execution.work_dir = config.execution.output_dir / 'ncdlmuse_wf'
-    config.execution.work_dir.mkdir(exist_ok=True, parents=True)
-    config.loggers.cli.info(f'Using working directory: {config.execution.work_dir}')
-
-    # Log Dir (determine path based on analysis level, create)
-    # Default log directory (used for group level or multi-subject runs)
-    log_dir_base = config.execution.ncdlmuse_dir / 'logs'
-    run_uuid = config.execution.run_uuid
-
-    # Check for single-subject participant-level analysis for specific log structure
-    subj_specific_log = False
-    if (
-        config.execution.analysis_level == 'participant' and
-        config.execution.participant_label and
-        len(config.execution.participant_label) == 1
-    ):
-        subj_label = config.execution.participant_label[0]
-        # Use structure: <output_dir>/ncdlmuse/sub-<label>/logs/<uuid>/
-        config.execution.log_dir = (
-            config.execution.ncdlmuse_dir / 
-            f'sub-{subj_label}' / 
-            'logs' / 
-            run_uuid
-        )
-        config.loggers.cli.info(
-            f'Running participant level analysis for {subj_label}, '
-            f'using log directory: {config.execution.log_dir}'
-        )
-        subj_specific_log = True
-    else:
-        # Default location for group or multi-subject participant runs
-        config.execution.log_dir = log_dir_base / run_uuid
-        config.loggers.cli.info(f'Using default log directory: {config.execution.log_dir}')
-
-    config.execution.log_dir.mkdir(exist_ok=True, parents=True)
-
-
-    # --- Setup Logging ---
-    # Determine log level from verbosity count
+    # Determine log_level early and set CLI logger level for console output for all modes
     log_level = int(max(25 - 5 * config.execution.verbose_count, logging.DEBUG))
-    config.execution.log_level = log_level # Store the determined level
+    config.execution.log_level = log_level
+    config.loggers.cli.setLevel(log_level) # Basic console logger
+    build_log = config.loggers.cli
 
-    # Configure root logger and handlers (will use config.execution.log_dir)
-    _setup_logging(log_level)
-    build_log = config.loggers.cli # Use this logger after setup
+    # Initialize config_file_path to be defined in both branches
+    config_file_path = None
 
+    if config.execution.analysis_level != 'group':
+        # === PARTICIPANT LEVEL (or other non-group workflows) ===
 
-    # --- Configure Nipype ---
-    # Update nipype config with paths and settings
-    nipype_settings = {
-        'logging': {
-            'log_directory': str(config.execution.log_dir),
-            'log_to_file': False, # Disable nipype's pypeline.log file
-            'workflow_level': logging.getLevelName(log_level),
-            'interface_level': logging.getLevelName(log_level),
-            'log_format': '%(asctime)s %(name)s %(levelname)s:\n\t %(message)s',
-            'datefmt': '%%y%%m%%d-%%H:%%M:%%S'
-        },
-        'execution': {
-            'crashdump_dir': str(config.execution.log_dir),
-            'stop_on_first_crash': config.nipype.stop_on_first_crash,
-            'hash_method': 'content',
-            'crashfile_format': 'txt',
-            'remove_unnecessary_outputs': False,
-            'remove_node_directories': False,
-            'check_version': False,  # disable future telemetry
-            'get_linked_libs': config.nipype.get_linked_libs,
-        },
-        'monitoring': {
-            'enabled': config.nipype.resource_monitor,
-            'sample_frequency': '0.5',
-            'summary_append': True,
-        } if config.nipype.resource_monitor else {},
-    }
+        # --- Work Dir ---
+        if opts.work_dir: # Check opts directly for work_dir to override loaded config
+            config.execution.work_dir = opts.work_dir.resolve()
+        elif not config.execution.work_dir: # If not in opts and not in loaded config
+            config.execution.work_dir = config.execution.output_dir / 'ncdlmuse_wf'
+        else: # work_dir was in loaded config, resolve it
+            config.execution.work_dir = Path(config.execution.work_dir).resolve()
+        config.execution.work_dir.mkdir(exist_ok=True, parents=True)
+        build_log.info(f'Using working directory: {config.execution.work_dir}')
 
-    nipype_config.update_config(nipype_settings)
+        # --- Log Dir & File Logging Setup ---
+        log_dir_base = config.execution.ncdlmuse_dir / 'logs'
+        run_uuid = config.execution.run_uuid # Ensure run_uuid is accessed/initialized
+        if (config.execution.participant_label and
+                len(config.execution.participant_label) == 1):
+            subj_label = config.execution.participant_label[0]
+            config.execution.log_dir = (
+                config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'logs' / run_uuid
+            )
+            build_log.info(
+                f'Participant run for {subj_label}, '
+                f'using log directory: {config.execution.log_dir}'
+            )
+        else:
+            config.execution.log_dir = log_dir_base / run_uuid
+            build_log.info(f'Using default log directory: {config.execution.log_dir}')
 
-    # Control Nipype logging to prevent duplication
-    nipype_config.enable_debug_mode()  # This prevents Nipype from adding its own default file/workflow handlers
+        config.execution.log_dir.mkdir(exist_ok=True, parents=True) # Create log_dir
+        _setup_logging(log_level) # Setup file-based logging into log_dir
 
-    # Explicitly clear any pre-existing handlers from Nipype's loggers
-    # to ensure only our root logger's handlers (via propagation) are used.
-    nipype_logger_names = ['nipype', 'nipype.workflow', 'nipype.interface', 'nipype.utils']
-    for logger_name in nipype_logger_names:
-        logger_instance = logging.getLogger(logger_name)
-        if hasattr(logger_instance, 'handlers'):
-            for handler in logger_instance.handlers[:]:  # Iterate over a copy
-                logger_instance.removeHandler(handler)
-                try:
-                    handler.close()  # Attempt to close handler
-                except Exception:
-                    pass  # Ignore errors during handler closing
-    
-    # Allow Nipype logs to propagate to our handlers
-    logging.getLogger('nipype.workflow').propagate = True
+        # --- Nipype Configuration ---
+        nipype_settings = {
+            'logging': {
+                'log_directory': str(config.execution.log_dir),
+                'log_to_file': False,
+                'workflow_level': logging.getLevelName(log_level),
+                'interface_level': logging.getLevelName(log_level),
+            },
+            'execution': {
+                'crashdump_dir': str(config.execution.log_dir),
+                'stop_on_first_crash': config.nipype.stop_on_first_crash,
+                'hash_method': 'content', 'crashfile_format': 'txt',
+                'remove_unnecessary_outputs': False, 'remove_node_directories': False,
+                'check_version': False, 'get_linked_libs': config.nipype.get_linked_libs,
+            },
+            'monitoring': {
+                'enabled': config.nipype.resource_monitor,
+                'sample_frequency': '0.5', 'summary_append': True,
+            } if config.nipype.resource_monitor else {},
+        }
+        nipype_config.update_config(nipype_settings)
+        nipype_config.enable_debug_mode() 
+        for logger_name in ['nipype.workflow', 'nipype.interface', 'nipype.utils']:
+            logging.getLogger(logger_name).propagate = True
+        logging.getLogger('cli').propagate = False
 
+        config_file_path = config.execution.log_dir / 'ncdlmuse.toml'
+
+    else:  # === GROUP LEVEL ANALYSIS ===
+        config.execution.work_dir = None
+        config.execution.log_dir = None
+        build_log.info(
+            'Group analysis: Skipping creation of work_dir and log_dir/file-logging setup.')
+        config_file_path = None # Explicitly set to None
+
+    current_config_dict = {'execution': {
+        'work_dir': config.execution.work_dir,
+        'log_dir': config.execution.log_dir
+    }}
+    config.from_dict(current_config_dict, init=False)
 
     # --- Resource Management Checks ---
-    # Check thread counts
-    if (
-        config.nipype.omp_nthreads is not None and
-        config.nipype.n_procs is not None and
-        config.nipype.n_procs > 0 and # Avoid division by zero or illogical checks
-        config.nipype.n_procs < config.nipype.omp_nthreads
-    ):
-        build_log.warning(
-            f'Per-process threads (--omp-nthreads={config.nipype.omp_nthreads}) '
-            f'exceed total CPUs (--nprocs={config.nipype.n_procs}). This may lead to '
-            'inefficient resource usage.'
-        )
-
+    if config.execution.analysis_level != 'group':
+        if (
+            config.nipype.omp_nthreads is not None and
+            config.nipype.n_procs is not None and
+            config.nipype.n_procs > 0 and # Avoid division by zero or illogical checks
+            config.nipype.n_procs < config.nipype.omp_nthreads
+        ):
+            build_log.warning(
+                f'Per-process threads (--omp-nthreads={config.nipype.omp_nthreads}) '
+                f'exceed total CPUs (--nprocs={config.nipype.n_procs}). This may lead to '
+                'inefficient resource usage.'
+            )
 
     # --- Validate BIDS Dataset and Select Subjects/Sessions ---
-    if not config.execution.skip_bids_validation or not config.execution.layout:
-        from bids.layout import BIDSLayout, BIDSLayoutIndexer
-        from bids.config import set_options as bids_set_options
+    if config.execution.analysis_level != 'group':
+        if not config.execution.skip_bids_validation or not config.execution.layout:
+            from bids.layout import BIDSLayout, BIDSLayoutIndexer
 
-        build_log.info(f'Found BIDS dataset at: {config.execution.bids_dir}')
-        # Check for dataset_description.json before creating layout
-        dataset_desc_path = config.execution.bids_dir / 'dataset_description.json'
-        if not dataset_desc_path.is_file():
-            build_log.warning(
-                f'dataset_description.json not found at BIDS root: {dataset_desc_path}. '
-                f'PyBIDS indexing may fail or be incorrect, even with validation skipped.'
-            )
-            # Depending on desired strictness, could raise parser.error here
-
-        bids_validate = not config.execution.skip_bids_validation
-        build_log.info(
-            f'Running PyBIDS indexing (validation {"enabled" if bids_validate else "disabled"})...'
-        )
-
-        # Determine database path (might be None)
-        database_path = config.execution.bids_database_dir
-        if database_path:
-            database_path = database_path.resolve()
-            database_path.mkdir(exist_ok=True, parents=True)
-        else:
-            # Instruct BIDSLayout to use a default path if database_path is None
-            # by not providing database_path=None, but letting it default
-            pass
-
-        # Define ignore patterns
-        ignore_patterns = (
-            'code', 'stimuli', 'sourcedata', 'models',
-            'derivatives', re.compile(r'^\.') # Correct regex for hidden files
-        )
-
-        try:
-            # Create BIDSLayoutIndexer with validation and ignore settings
-            bids_indexer = BIDSLayoutIndexer(
-                validate=bids_validate,
-                ignore=ignore_patterns,
-            )
-            layout = BIDSLayout(
-                root=str(config.execution.bids_dir),
-                # Set database_path=None and reset_database=True for in-memory/fresh index
-                database_path=None,
-                indexer=bids_indexer, # Pass the configured indexer
-                reset_database=True, # Force fresh index
-            )
-            config.execution.layout = layout # Store layout in config
-
-        except Exception as e:
-            build_log.critical(f'PyBIDS failed to index BIDS dataset: {e}')
-            build_log.critical(
-                'Please check the dataset structure and PyBIDS installation. '
-                'If you believe the dataset is valid, use --skip-bids-validation.'
-            )
-            sys.exit(1)
-
-        # --- Filter Subjects/Sessions ---
-        all_subjects = layout.get_subjects()
-        if not all_subjects:
-            build_log.critical('No subjects found in BIDS dataset. Check filters and dataset.')
-            sys.exit(1)
-
-        # Select subjects
-        if config.execution.participant_label:
-            selected_subjects = set(config.execution.participant_label)
-            missing_subjects = selected_subjects - set(all_subjects)
-            if missing_subjects:
-                parser.error(
-                    'One or more participant labels were not found in the BIDS directory: '
-                    f'{", ".join(sorted(list(missing_subjects)))}.'
+            build_log.info(f'Found BIDS dataset at: {config.execution.bids_dir}')
+            # Check for dataset_description.json before creating layout
+            dataset_desc_path = config.execution.bids_dir / 'dataset_description.json'
+            if not dataset_desc_path.is_file():
+                build_log.warning(
+                    f'dataset_description.json not found at BIDS root: {dataset_desc_path}. '
+                    f'PyBIDS indexing may fail or be incorrect, even with validation skipped.'
                 )
-            config.execution.participant_label = sorted(list(selected_subjects))
+                # Depending on desired strictness, could raise parser.error here
+
+            bids_validate = not config.execution.skip_bids_validation
             build_log.info(
-                f"Processing specified participants: "
-                f"{', '.join(config.execution.participant_label)}"
-            )
-        else:
-            config.execution.participant_label = sorted(all_subjects)
-            build_log.info(
-                f"Processing all {len(all_subjects)} participants found in BIDS dataset."
+                f'Running PyBIDS indexing (validation '
+                f'{"enabled" if bids_validate else "disabled"})...'
             )
 
-        # Validate / Select sessions (if --session-id was used)
-        if config.execution.session_label:
-            selected_sessions = set(config.execution.session_label)
-            found_sessions_for_participants = set()
-            for subj in config.execution.participant_label:
-                found_sessions_for_participants.update(
-                     layout.get_sessions(subject=subj) or []
+            # Determine database path (might be None)
+            database_path = config.execution.bids_database_dir
+            if database_path:
+                database_path = database_path.resolve()
+                database_path.mkdir(exist_ok=True, parents=True)
+            else:
+                # Instruct BIDSLayout to use a default path if database_path is None
+                # by not providing database_path=None, but letting it default
+                pass
+
+            # Define ignore patterns
+            ignore_patterns = (
+                'code', 'stimuli', 'sourcedata', 'models',
+                'derivatives', re.compile(r'^\.') # Correct regex for hidden files
+            )
+
+            try:
+                # Create BIDSLayoutIndexer with validation and ignore settings
+                bids_indexer = BIDSLayoutIndexer(
+                    validate=bids_validate,
+                    ignore=ignore_patterns,
+                )
+                layout = BIDSLayout(
+                    root=str(config.execution.bids_dir),
+                    # Set database_path=None and reset_database=True for in-memory/fresh index
+                    database_path=None,
+                    indexer=bids_indexer, # Pass the configured indexer
+                    reset_database=True, # Force fresh index
+                )
+                config.execution.layout = layout # Store layout in config
+
+            except (bids.exceptions.PyBIDSException, OSError, ValueError) as e:
+                build_log.critical(f'PyBIDS failed to index BIDS dataset: {e}')
+                build_log.critical(
+                    'Please check the dataset structure and PyBIDS installation. '
+                    'If you believe the dataset is valid, use --skip-bids-validation.'
+                )
+                sys.exit(1)
+
+            # --- Filter Subjects/Sessions ---
+            all_subjects = layout.get_subjects()
+            if not all_subjects:
+                build_log.critical('No subjects found in BIDS dataset. Check filters and dataset.')
+                sys.exit(1)
+
+            # Select subjects
+            if config.execution.participant_label:
+                selected_subjects = set(config.execution.participant_label)
+                missing_subjects = selected_subjects - set(all_subjects)
+                if missing_subjects:
+                    parser.error(
+                        'One or more participant labels were not found in the BIDS directory: '
+                        f'{", ".join(sorted(missing_subjects))}.'
+                    )
+                config.execution.participant_label = sorted(selected_subjects)
+                build_log.info(
+                    f"Processing specified participants: "
+                    f"{', '.join(config.execution.participant_label)}"
+                )
+            else:
+                config.execution.participant_label = sorted(all_subjects)
+                build_log.info(
+                    f'Processing all {len(all_subjects)} participants found in BIDS dataset.'
                 )
 
-            missing_sessions = selected_sessions - found_sessions_for_participants
-            if missing_sessions:
-                 build_log.warning(
-                      f'Specified session labels not found for *all* selected participants: '
-                      f'{", ".join(sorted(list(missing_sessions)))}. '
-                      'Ensure these sessions exist for the intended participants.'
-                 )
+            # Validate / Select sessions (if --session-id was used)
+            if config.execution.session_label:
+                selected_sessions = set(config.execution.session_label)
+                found_sessions_for_participants = set()
+                for subj in config.execution.participant_label:
+                    found_sessions_for_participants.update(
+                         layout.get_sessions(subject=subj) or []
+                    )
 
-            config.execution.session_label = sorted(list(selected_sessions))
-            build_log.info(
-                 f"Filtering input data by specified sessions: "
-                 f"{', '.join(config.execution.session_label)}"
-            )
-        else:
-            build_log.info("Processing all sessions found for the selected participants.")
+                missing_sessions = selected_sessions - found_sessions_for_participants
+                if missing_sessions:
+                     build_log.warning(
+                          f'Specified session labels not found for *all* selected participants: '
+                          f'{", ".join(sorted(missing_sessions))}. '
+                          'Ensure these sessions exist for the intended participants.'
+                     )
+
+                config.execution.session_label = sorted(selected_sessions)
+                build_log.info(
+                     f"Filtering input data by specified sessions: "
+                     f"{', '.join(config.execution.session_label)}"
+                )
+            else:
+                build_log.info(
+                    'Processing all sessions found for the selected participants.'
+                )
 
     # --- Collect T1w file list --- #
-    if config.execution.layout:
-        from bids.layout import Query # Import Query if needed
-        try:
-            config.execution.t1w_list = config.execution.layout.get(
-                suffix='T1w',
-                extension=['.nii', '.nii.gz'],
-                return_type='file',
-            )
-
-            if not config.execution.t1w_list:
-                err_msg = (
-                    f'No T1w files found for participants: {config.execution.participant_label} '
-                    f'and sessions: {config.execution.session_label}. '
-                    f'Check BIDS dataset and filters.'
+    if config.execution.analysis_level != 'group':
+        if config.execution.layout:
+            try:
+                config.execution.t1w_list = config.execution.layout.get(
+                    suffix='T1w',
+                    extension=['.nii', '.nii.gz'],
+                    return_type='file',
                 )
-                build_log.critical(err_msg)
-                parser.error(err_msg) # Exit cleanly via parser error
-            else:
-                build_log.info(f'Found {len(config.execution.t1w_list)} T1w files for processing.')
-        except Exception as e:
-            build_log.critical(f'Error querying BIDS layout for T1w files: {e}')
-            sys.exit(1)
-    else:
-        # Handle case where layout couldn't be created earlier (e.g., skip-validation failed)
-        build_log.critical('BIDS layout not available, cannot collect T1w files.')
-        sys.exit(1)
+
+                if not config.execution.t1w_list:
+                    err_msg = (
+                        f'No T1w files found for participants: '
+                        f'{config.execution.participant_label} '
+                        f'and sessions: {config.execution.session_label}. '
+                        f'Check BIDS dataset and filters.'
+                    )
+                    build_log.critical(err_msg)
+                    parser.error(err_msg) # Exit cleanly via parser error
+                else:
+                    build_log.info(f'Found {len(config.execution.t1w_list)} T1w files for processing.')
+            except (bids.exceptions.PyBIDSException, ValueError) as e:
+                build_log.critical(f'Error querying BIDS layout for T1w files: {e}')
+                sys.exit(1)
+        else:
+            # Handle case where layout couldn't be created earlier (e.g., skip-validation failed)
+            # or if analysis_level is 'group' and layout wasn't created.
+            build_log.critical(
+                'BIDS layout not available or not applicable for T1w collection '
+                'in group mode.'
+            )
+            # For group mode, this is not an error, so we don't exit.
+            # For participant mode, if layout is None here, it implies an
+            # earlier exit or critical error.
+            if config.execution.analysis_level != 'group':
+                 sys.exit(1) # Exit only if participant mode and layout is missing
 
     # --- Final Path Checks ---
     # Ensure output_dir is not inside bids_dir
@@ -821,24 +822,30 @@ def parse_args(args=None, namespace=None):
             'The selected output folder is the same as the input BIDS folder. '
             f'Please modify the output path (suggestion: {rec_path}).'
         )
-    # Ensure work_dir is not inside bids_dir 
+    # Ensure work_dir is not inside bids_dir
     # (unless bids_dir is explicitly '.', which is unlikely for BIDS root)
-    if (config.execution.bids_dir != Path('.') and 
+    if (config.execution.work_dir and # This check is now safe as work_dir is None for group
+            config.execution.bids_dir != Path('.') and
             config.execution.bids_dir in config.execution.work_dir.parents):
         parser.error(
             'The selected working directory is a subdirectory of the input BIDS dataset. '
-            'This modifies the input dataset, which is forbidden and can lead to unexpected results. '
-            f'Please modify the output path (suggestion: {rec_path}).'
+            'This modifies the input dataset, which is forbidden and can lead to '
+            f'unexpected results. Please modify the output path (suggestion: {rec_path}).'
         )
 
     # --- Save Final Configuration ---
     try:
-        # Use the specific log directory determined earlier
-        config_file = config.execution.log_dir / 'ncdlmuse.toml'
-        config.to_filename(config_file)
-        build_log.info(f'Final configuration saved to: {config_file}')
-    except Exception as e:
-        build_log.error(f'Failed to save final configuration to {config_file}: {e}')
+        if config_file_path: # Path determined above based on analysis_level; None for group
+            config.to_filename(config_file_path)
+            build_log.info(f'Final configuration saved to: {config_file_path}')
+        elif config.execution.analysis_level == 'group':
+            build_log.info('Group analysis: Skipping saving of configuration file.')
+        else: # Should not happen if config_file_path is None only for group, but as safeguard
+            build_log.warning(
+                'Configuration file path not determined for non-group analysis. Config not saved.')
+    except OSError as e:
+        err_path_msg = str(config_file_path) if config_file_path else 'an undetermined path'
+        build_log.error(f'Failed to save final configuration to {err_path_msg}: {e}')
 
 
     # --- Update the config object one last time to ensure all sections are initialized ---
@@ -857,7 +864,8 @@ def _setup_logging(level):
     Allows Nipype log messages to propagate to the handlers defined here.
     """
     import sys
-    from nipype import config as ncfg # Use nipype config directly for log settings
+
+    from nipype import config as ncfg  # Use nipype config directly for log settings
 
     # Use log directory determined in parse_args
     log_dir = config.execution.log_dir
@@ -877,7 +885,7 @@ def _setup_logging(level):
         root_logger.removeHandler(handler)
         try:
             handler.close()
-        except Exception:
+        except OSError:
             pass # Ignore errors during handler closing
 
     # Set root logger level *before* adding handlers
@@ -901,7 +909,7 @@ def _setup_logging(level):
         file_handler.setFormatter(log_format)
         file_handler.setLevel(level) # Log everything >= level to file
         root_logger.addHandler(file_handler)
-    except Exception as e:
+    except OSError as e:
         # Fallback or warning if file logging fails
         logging.getLogger('cli').error(f'Could not open log file {log_file}: {e}')
 

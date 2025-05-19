@@ -1,10 +1,10 @@
 import json
-import logging
+import sys
 from pathlib import Path
+
 import pandas as pd
 from bids import BIDSLayout
 
-LOGGER = logging.getLogger('ncdlmuse.workflow.base')
 
 def aggregate_volumes(derivatives_dir, output_file):
     """Aggregates volumetric data from individual *_T1w.json files.
@@ -18,7 +18,7 @@ def aggregate_volumes(derivatives_dir, output_file):
     """
     derivatives_dir = Path(derivatives_dir)
     output_file = Path(output_file)
-    LOGGER.info(f"Aggregating volumes from: {derivatives_dir}")
+    print(f'Aggregating json files with ROI volumes from: {derivatives_dir}')
 
     try:
         # Use BIDSLayout to find the output JSON files
@@ -27,7 +27,7 @@ def aggregate_volumes(derivatives_dir, output_file):
         json_files = layout.get(suffix='T1w', extension='json', return_type='file')
 
         if not json_files:
-            LOGGER.warning(f"No T1w JSON files found in {derivatives_dir}")
+            print(f'WARNING: No T1w JSON files found in {derivatives_dir}', file=sys.stderr)
             return
 
         all_data_rows = []
@@ -35,7 +35,6 @@ def aggregate_volumes(derivatives_dir, output_file):
 
         for json_path in json_files:
             try:
-                LOGGER.debug(f"Processing: {json_path}")
                 entities = layout.parse_file_entities(json_path)
                 subject_id = f"sub-{entities['subject']}"
                 session_id = f"ses-{entities['session']}" if 'session' in entities else None
@@ -44,7 +43,10 @@ def aggregate_volumes(derivatives_dir, output_file):
                     data = json.load(f)
 
                 if 'volumes' not in data or not isinstance(data['volumes'], dict):
-                    LOGGER.warning(f"No 'volumes' dict found in {json_path}. Skipping.")
+                    print(
+                        f"WARNING: No 'volumes' dict found in {json_path}. "
+                        f"Skipping.", file=sys.stderr
+                        )
                     continue
 
                 # Prepare row data
@@ -58,14 +60,15 @@ def aggregate_volumes(derivatives_dir, output_file):
                 all_volume_keys.update(data['volumes'].keys())
 
             except FileNotFoundError:
-                 LOGGER.error(f"File not found during aggregation: {json_path}")
+                 print(f'ERROR: File not found during aggregation: {json_path}', file=sys.stderr)
             except json.JSONDecodeError:
-                 LOGGER.warning(f"Could not decode JSON: {json_path}")
-            except Exception as e:
-                 LOGGER.warning(f"Error processing {json_path}: {e!r}")
+                 print(f'WARNING: Could not decode JSON: {json_path}', file=sys.stderr)
+            except (KeyError, TypeError, ValueError, OSError) as e:
+                 print(f'WARNING: Error processing {json_path}: {e!r}', file=sys.stderr)
 
         if not all_data_rows:
-            LOGGER.warning("No valid volume data collected.")
+            # LOGGER.warning('No valid volume data collected.')
+            print('WARNING: No valid volume data collected.', file=sys.stderr)
             return
 
         # Create DataFrame
@@ -76,7 +79,7 @@ def aggregate_volumes(derivatives_dir, output_file):
         if 'session' in df.columns:
             id_cols.append('session')
         # Place 'mrid' next, if present, then remaining volumes sorted
-        volume_cols = sorted(list(all_volume_keys))
+        volume_cols = sorted(all_volume_keys)
         if 'mrid' in volume_cols:
             volume_cols.remove('mrid')
             final_cols = id_cols + ['mrid'] + volume_cols
@@ -87,7 +90,7 @@ def aggregate_volumes(derivatives_dir, output_file):
         df = df.reindex(columns=final_cols)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_file, sep='\t', index=False, na_rep='n/a')
-        LOGGER.info(f"Aggregated volumes saved to {output_file}")
+        print(f'Aggregated volumes saved to {output_file}')
 
-    except Exception as e:
-        LOGGER.error(f"Volume aggregation failed: {e!r}") 
+    except (OSError, pd.errors.PandasError, MemoryError) as e:
+        print(f'ERROR: Volume aggregation failed: {e!r}', file=sys.stderr)
