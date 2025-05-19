@@ -600,7 +600,7 @@ class loggers:
             _handler_root_console.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
             # Set handler level to the general execution log level
             # The root logger's level will also be set below, this ensures the handler passes messages.
-            _handler_root_console.setLevel(execution.log_level) 
+            _handler_root_console.setLevel(execution.log_level)
             cls.default.addHandler(_handler_root_console)
 
         cls.default.setLevel(execution.log_level)
