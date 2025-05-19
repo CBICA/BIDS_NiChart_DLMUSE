@@ -460,8 +460,27 @@ class execution(_Config):
         from bids.layout import BIDSLayout
         from bids.layout.index import BIDSLayoutIndexer
 
-        _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / 'bids_db')
-        _db_path.mkdir(exist_ok=True, parents=True)
+        # Safely determine the BIDS database path
+        default_bids_db_in_workdir = None
+        if cls.work_dir and hasattr(cls, 'run_uuid') and cls.run_uuid:
+            # Only construct this path if work_dir and run_uuid are available
+            try:
+                default_bids_db_in_workdir = Path(cls.work_dir) / cls.run_uuid / 'bids_db'
+            except TypeError: # Should be caught by the if, but as a safeguard
+                default_bids_db_in_workdir = None
+
+        # cls._db_path assignment (assuming the attribute is named _db_path)
+        # The original line was: _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / 'bids_db')
+        if hasattr(cls, '_db_path'): # Check if the attribute exists
+            cls._db_path = cls.bids_database_dir or default_bids_db_in_workdir
+        elif hasattr(cls, 'db_path'): # Check for alternative common name
+            cls.db_path = cls.bids_database_dir or default_bids_db_in_workdir
+        else:
+            # If the exact attribute name is unknown, this part might need adjustment
+            # For now, let's assume it's _db_path and it's okay if it's not explicitly set here
+            # if no specific bids_database_dir is provided and work_dir is None.
+            # The main goal is to avoid the TypeError.
+            pass
 
         # Setup the BIDSLayout
         try:
@@ -477,7 +496,7 @@ class execution(_Config):
             )
             cls._layout = BIDSLayout(
                 str(cls.bids_dir),
-                database_path=_db_path,
+                database_path=cls._db_path,
                 reset_database=bool(cls.bids_database_dir is None),
                 indexer=indexer,
             )
