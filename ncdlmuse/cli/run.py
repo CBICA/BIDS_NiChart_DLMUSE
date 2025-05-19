@@ -58,12 +58,7 @@ def main():
     from nipype import config as ncfg, logging as nlogging
     from .. import config
     from .parser import parse_args
-    from .workflow import build_workflow
-    # Import the group aggregation function
     from ..workflows.group import aggregate_volumes
-    # Import needed for BIDSLayout initialization
-    from bids.layout import BIDSLayout, BIDSLayoutIndexer
-    import json # For writing dataset_description.json
     from ..utils.bids import write_derivative_description
 
     # Helper function to ensure dataset_description.json exists
@@ -85,24 +80,41 @@ def main():
     # 1. Parse arguments and config file, setup logging
     parse_args()
 
-    # Set up conditional logging based on config
-    log_file = config.execution.log_dir / f"ncdlmuse_{config.execution.run_uuid}.log"
-    # Set up logging
-    ncfg.update_config({
-        "logging": {
-            "log_directory": str(config.execution.log_dir),
-            "log_to_file": False,
-            "log_format": '%(asctime)s %(name)s %(levelname)s:\n\t %(message)s',
-            "datefmt": '%%y%%m%%d-%%H:%%M:%%S'
-        }
-    })
-    nlogging.update_logging(ncfg)
-    # Retrieve logging level
-    log_level = config.execution.log_level
-    config.loggers.cli.setLevel(log_level)
-    config.loggers.interface.setLevel(log_level)
-    config.loggers.utils.setLevel(log_level)
-    config.loggers.workflow.setLevel(log_level)
+    # --- Handle group-level analysis separately and exit ---
+    if config.execution.analysis_level == 'group':
+        config.loggers.cli.info('Performing group-level aggregation.')
+        output_dir = Path(config.execution.ncdlmuse_dir)
+        group_output_file = output_dir / 'group_ncdlmuse.tsv'
+        retcode = 0
+
+        # Ensure dataset_description.json for the output directory
+        if not ensure_dataset_description():
+            # Log warning but proceed with aggregation attempt
+            config.loggers.cli.warning(
+                "Failed to create dataset_description.json for the group output directory. "
+                "Attempting aggregation regardless."
+            )
+
+        try:
+            aggregate_volumes(
+                derivatives_dir=output_dir,
+                output_file=group_output_file,
+            )
+            config.loggers.cli.info(
+                f"Finished aggregating ROI volumes. Results are in {group_output_file}."
+            )
+        except FileNotFoundError:
+            config.loggers.cli.warning(
+                f"Not found any JSON files with ROI volumes for aggregation in {output_dir}."
+            )
+            # This is a warning, not necessarily a failure of the command itself.
+            # If this should be an error, set retcode = 1
+        except Exception as e:
+            config.loggers.cli.critical(f'Group aggregation failed: {e}', exc_info=True)
+            retcode = 1
+        return retcode # Exit after group processing
+
+    # --- Participant-level analysis and other modes (reports-only, boilerplate) ---
 
     # Called with reports only
     if config.execution.reports_only:
@@ -264,52 +276,47 @@ def main():
         f'Building ncdlmuse workflow (analysis level: {config.execution.analysis_level}).'
     )
     config_file = config.execution.log_dir / 'ncdlmuse.toml'
-    # If running group level, build_workflow might return early or None
-    if config.execution.analysis_level == 'group':
-        config.to_filename(config_file)
-        config.loggers.cli.info(
-            'Group-level analysis selected. Skipping Nipype workflow execution.'
-            )
-        # return 0 # Or call group-level report function
-        workflow = None
-        retcode = 0 # Assume success for now, as no workflow runs
+    
+    # This section is now only for participant level, as group level exits early.
+    # Import build_workflow here as it's participant-specific.
+    from .workflow import build_workflow
+    from bids.layout import BIDSLayout, BIDSLayoutIndexer # Needed for participant workflow
 
-    else: # Participant level
-        # Set up a dictionary for retrieving workflow results
-        with Manager() as mgr:
-            retval = mgr.dict()
-            p = Process(target=build_workflow, args=(str(config_file), retval))
-            p.start()
-            p.join()
-            retcode = p.exitcode or 0
-            workflow = retval.get('workflow', None)
+    # Set up a dictionary for retrieving workflow results
+    with Manager() as mgr:
+        retval = mgr.dict()
+        p = Process(target=build_workflow, args=(str(config_file), retval))
+        p.start()
+        p.join()
+        retcode = p.exitcode or 0
+        workflow = retval.get('workflow', None)
 
-        # Check exit code from build process
-        if retcode != 0:
-            config.loggers.cli.critical('Workflow building failed. See logs for details.')
-            return retcode
+    # Check exit code from build process
+    if retcode != 0:
+        config.loggers.cli.critical('Workflow building failed. See logs for details.')
+        return retcode
 
-        if workflow is None:
-            config.loggers.cli.critical('Workflow building did not return a workflow object.')
-            return 1
+    if workflow is None:
+        config.loggers.cli.critical('Workflow building did not return a workflow object.')
+        return 1
 
-        # Save workflow graph if requested
-        if config.execution.write_graph:
-            try:
-                workflow.write_graph(graph2use='colored', format='svg', simple_form=True)
-                config.loggers.cli.info('Workflow graph saved to work directory.')
-            except Exception as e:
-                config.loggers.cli.warning(f'Could not save workflow graph: {e}')
+    # Save workflow graph if requested
+    if config.execution.write_graph:
+        try:
+            workflow.write_graph(graph2use='colored', format='svg', simple_form=True)
+            config.loggers.cli.info('Workflow graph saved to work directory.')
+        except Exception as e:
+            config.loggers.cli.warning(f'Could not save workflow graph: {e}')
 
-        # Check workflow for errors before running
-        workflow.config['execution']['crashdump_dir'] = str(config.execution.log_dir)
-        for node in workflow.list_node_names():
-            node_config = workflow.get_node(node).config or {}  # Handle None case
-            if any(req in node_config for req in (
-                'memory_gb', 'memory_mb', 'num_threads', 'num_cpus'
-                )):
-                workflow.get_node(node).config = node_config  # Ensure config exists
-                workflow.get_node(node).config['rules'] = False
+    # Check workflow for errors before running
+    workflow.config['execution']['crashdump_dir'] = str(config.execution.log_dir)
+    for node in workflow.list_node_names():
+        node_config = workflow.get_node(node).config or {}  # Handle None case
+        if any(req in node_config for req in (
+            'memory_gb', 'memory_mb', 'num_threads', 'num_cpus'
+            )):
+            workflow.get_node(node).config = node_config  # Ensure config exists
+            workflow.get_node(node).config['rules'] = False
 
     # 5. Execute workflow (participant level only for now)
     retcode = 0
@@ -324,26 +331,6 @@ def main():
         else:
             config.loggers.cli.info('Workflow finished successfully.')
             # Check for final output existence?
-    elif config.execution.analysis_level == 'group':
-        config.loggers.cli.info('Group-level analysis: Aggregating participant results.')
-        # Define the default output file path
-        group_output_file = config.execution.ncdlmuse_dir / 'group_ncdlmuse.tsv'
-        try:
-            config.loggers.cli.info(
-                f'Aggregating results to: {group_output_file}'
-            )
-            aggregate_volumes(
-                derivatives_dir=config.execution.ncdlmuse_dir,
-                output_file=group_output_file, # Use the default path
-            )
-            config.loggers.cli.info('Aggregation finished successfully.')
-        except FileNotFoundError as e:
-            config.loggers.cli.error(f'Aggregation failed: Could not find input files. {e}')
-            retcode = 1 # Mark run as failed if aggregation fails
-        except Exception as e:
-            config.loggers.cli.critical(f'Group aggregation failed: {e}', exc_info=True)
-            retcode = 1 # Mark run as failed
-
 
     # 6. Generate reports (unless build failed)
     if retcode == 0:
@@ -351,7 +338,7 @@ def main():
 
         config.loggers.cli.info('Generating final reports.')
         
-        # Ensure dataset_description.json exists
+        # Ensure dataset_description.json exists for participant output
         ensure_dataset_description()
 
         exit_code = generate_reports(
@@ -378,8 +365,8 @@ def main():
         config.loggers.cli.warning('Skipping report generation due to workflow execution failure.')
 
     config.loggers.cli.info(
-        f'BIDS_NiChart_DLMUSE finished. Exit code: {retcode}'
-        f" (participant id: {config.execution.participant_label or 'group'})"
+        f'Execution finished. Exit code: {retcode}'
+        f" ({config.execution.participant_label or 'group'})"
     )
     return retcode
 

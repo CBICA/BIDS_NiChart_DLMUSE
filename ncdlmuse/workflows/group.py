@@ -18,7 +18,7 @@ def aggregate_volumes(derivatives_dir, output_file):
     """
     derivatives_dir = Path(derivatives_dir)
     output_file = Path(output_file)
-    LOGGER.info(f"Aggregating volumes from: {derivatives_dir}")
+    LOGGER.info(f'Aggregating json files with ROI volumes from: {derivatives_dir}')
 
     try:
         # Use BIDSLayout to find the output JSON files
@@ -27,7 +27,7 @@ def aggregate_volumes(derivatives_dir, output_file):
         json_files = layout.get(suffix='T1w', extension='json', return_type='file')
 
         if not json_files:
-            LOGGER.warning(f"No T1w JSON files found in {derivatives_dir}")
+            LOGGER.warning(f'No T1w JSON files found in {derivatives_dir}')
             return
 
         all_data_rows = []
@@ -35,7 +35,7 @@ def aggregate_volumes(derivatives_dir, output_file):
 
         for json_path in json_files:
             try:
-                LOGGER.debug(f"Processing: {json_path}")
+                LOGGER.debug(f'Processing: {json_path}')
                 entities = layout.parse_file_entities(json_path)
                 subject_id = f"sub-{entities['subject']}"
                 session_id = f"ses-{entities['session']}" if 'session' in entities else None
@@ -58,14 +58,14 @@ def aggregate_volumes(derivatives_dir, output_file):
                 all_volume_keys.update(data['volumes'].keys())
 
             except FileNotFoundError:
-                 LOGGER.error(f"File not found during aggregation: {json_path}")
+                 LOGGER.error(f'File not found during aggregation: {json_path}')
             except json.JSONDecodeError:
-                 LOGGER.warning(f"Could not decode JSON: {json_path}")
-            except Exception as e:
-                 LOGGER.warning(f"Error processing {json_path}: {e!r}")
+                 LOGGER.warning(f'Could not decode JSON: {json_path}')
+            except (KeyError, TypeError, ValueError, OSError) as e:
+                 LOGGER.warning(f'Error processing {json_path}: {e!r}')
 
         if not all_data_rows:
-            LOGGER.warning("No valid volume data collected.")
+            LOGGER.warning('No valid volume data collected.')
             return
 
         # Create DataFrame
@@ -76,7 +76,7 @@ def aggregate_volumes(derivatives_dir, output_file):
         if 'session' in df.columns:
             id_cols.append('session')
         # Place 'mrid' next, if present, then remaining volumes sorted
-        volume_cols = sorted(list(all_volume_keys))
+        volume_cols = sorted(all_volume_keys)
         if 'mrid' in volume_cols:
             volume_cols.remove('mrid')
             final_cols = id_cols + ['mrid'] + volume_cols
@@ -87,7 +87,7 @@ def aggregate_volumes(derivatives_dir, output_file):
         df = df.reindex(columns=final_cols)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_file, sep='\t', index=False, na_rep='n/a')
-        LOGGER.info(f"Aggregated volumes saved to {output_file}")
+        LOGGER.info(f'Aggregated volumes saved to {output_file}')
 
-    except Exception as e:
-        LOGGER.error(f"Volume aggregation failed: {e!r}") 
+    except (OSError, pd.errors.PandasError, MemoryError) as e:
+        LOGGER.error(f'Volume aggregation failed: {e!r}')
