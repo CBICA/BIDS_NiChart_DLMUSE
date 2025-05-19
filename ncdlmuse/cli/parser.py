@@ -665,142 +665,154 @@ def parse_args(args=None, namespace=None):
             )
 
     # --- Validate BIDS Dataset and Select Subjects/Sessions ---
-    if not config.execution.skip_bids_validation or not config.execution.layout:
-        from bids.layout import BIDSLayout, BIDSLayoutIndexer
+    if config.execution.analysis_level != 'group':
+        if not config.execution.skip_bids_validation or not config.execution.layout:
+            from bids.layout import BIDSLayout, BIDSLayoutIndexer
 
-        build_log.info(f'Found BIDS dataset at: {config.execution.bids_dir}')
-        # Check for dataset_description.json before creating layout
-        dataset_desc_path = config.execution.bids_dir / 'dataset_description.json'
-        if not dataset_desc_path.is_file():
-            build_log.warning(
-                f'dataset_description.json not found at BIDS root: {dataset_desc_path}. '
-                f'PyBIDS indexing may fail or be incorrect, even with validation skipped.'
-            )
-            # Depending on desired strictness, could raise parser.error here
-
-        bids_validate = not config.execution.skip_bids_validation
-        build_log.info(
-            f'Running PyBIDS indexing (validation {"enabled" if bids_validate else "disabled"})...'
-        )
-
-        # Determine database path (might be None)
-        database_path = config.execution.bids_database_dir
-        if database_path:
-            database_path = database_path.resolve()
-            database_path.mkdir(exist_ok=True, parents=True)
-        else:
-            # Instruct BIDSLayout to use a default path if database_path is None
-            # by not providing database_path=None, but letting it default
-            pass
-
-        # Define ignore patterns
-        ignore_patterns = (
-            'code', 'stimuli', 'sourcedata', 'models',
-            'derivatives', re.compile(r'^\.') # Correct regex for hidden files
-        )
-
-        try:
-            # Create BIDSLayoutIndexer with validation and ignore settings
-            bids_indexer = BIDSLayoutIndexer(
-                validate=bids_validate,
-                ignore=ignore_patterns,
-            )
-            layout = BIDSLayout(
-                root=str(config.execution.bids_dir),
-                # Set database_path=None and reset_database=True for in-memory/fresh index
-                database_path=None,
-                indexer=bids_indexer, # Pass the configured indexer
-                reset_database=True, # Force fresh index
-            )
-            config.execution.layout = layout # Store layout in config
-
-        except (bids.exceptions.PyBIDSException, OSError, ValueError) as e:
-            build_log.critical(f'PyBIDS failed to index BIDS dataset: {e}')
-            build_log.critical(
-                'Please check the dataset structure and PyBIDS installation. '
-                'If you believe the dataset is valid, use --skip-bids-validation.'
-            )
-            sys.exit(1)
-
-        # --- Filter Subjects/Sessions ---
-        all_subjects = layout.get_subjects()
-        if not all_subjects:
-            build_log.critical('No subjects found in BIDS dataset. Check filters and dataset.')
-            sys.exit(1)
-
-        # Select subjects
-        if config.execution.participant_label:
-            selected_subjects = set(config.execution.participant_label)
-            missing_subjects = selected_subjects - set(all_subjects)
-            if missing_subjects:
-                parser.error(
-                    'One or more participant labels were not found in the BIDS directory: '
-                    f'{", ".join(sorted(missing_subjects))}.'
+            build_log.info(f'Found BIDS dataset at: {config.execution.bids_dir}')
+            # Check for dataset_description.json before creating layout
+            dataset_desc_path = config.execution.bids_dir / 'dataset_description.json'
+            if not dataset_desc_path.is_file():
+                build_log.warning(
+                    f'dataset_description.json not found at BIDS root: {dataset_desc_path}. '
+                    f'PyBIDS indexing may fail or be incorrect, even with validation skipped.'
                 )
-            config.execution.participant_label = sorted(selected_subjects)
+                # Depending on desired strictness, could raise parser.error here
+
+            bids_validate = not config.execution.skip_bids_validation
             build_log.info(
-                f"Processing specified participants: "
-                f"{', '.join(config.execution.participant_label)}"
-            )
-        else:
-            config.execution.participant_label = sorted(all_subjects)
-            build_log.info(
-                f'Processing all {len(all_subjects)} participants found in BIDS dataset.'
+                f'Running PyBIDS indexing (validation '
+                f'{"enabled" if bids_validate else "disabled"})...'
             )
 
-        # Validate / Select sessions (if --session-id was used)
-        if config.execution.session_label:
-            selected_sessions = set(config.execution.session_label)
-            found_sessions_for_participants = set()
-            for subj in config.execution.participant_label:
-                found_sessions_for_participants.update(
-                     layout.get_sessions(subject=subj) or []
+            # Determine database path (might be None)
+            database_path = config.execution.bids_database_dir
+            if database_path:
+                database_path = database_path.resolve()
+                database_path.mkdir(exist_ok=True, parents=True)
+            else:
+                # Instruct BIDSLayout to use a default path if database_path is None
+                # by not providing database_path=None, but letting it default
+                pass
+
+            # Define ignore patterns
+            ignore_patterns = (
+                'code', 'stimuli', 'sourcedata', 'models',
+                'derivatives', re.compile(r'^\.') # Correct regex for hidden files
+            )
+
+            try:
+                # Create BIDSLayoutIndexer with validation and ignore settings
+                bids_indexer = BIDSLayoutIndexer(
+                    validate=bids_validate,
+                    ignore=ignore_patterns,
+                )
+                layout = BIDSLayout(
+                    root=str(config.execution.bids_dir),
+                    # Set database_path=None and reset_database=True for in-memory/fresh index
+                    database_path=None,
+                    indexer=bids_indexer, # Pass the configured indexer
+                    reset_database=True, # Force fresh index
+                )
+                config.execution.layout = layout # Store layout in config
+
+            except (bids.exceptions.PyBIDSException, OSError, ValueError) as e:
+                build_log.critical(f'PyBIDS failed to index BIDS dataset: {e}')
+                build_log.critical(
+                    'Please check the dataset structure and PyBIDS installation. '
+                    'If you believe the dataset is valid, use --skip-bids-validation.'
+                )
+                sys.exit(1)
+
+            # --- Filter Subjects/Sessions ---
+            all_subjects = layout.get_subjects()
+            if not all_subjects:
+                build_log.critical('No subjects found in BIDS dataset. Check filters and dataset.')
+                sys.exit(1)
+
+            # Select subjects
+            if config.execution.participant_label:
+                selected_subjects = set(config.execution.participant_label)
+                missing_subjects = selected_subjects - set(all_subjects)
+                if missing_subjects:
+                    parser.error(
+                        'One or more participant labels were not found in the BIDS directory: '
+                        f'{", ".join(sorted(missing_subjects))}.'
+                    )
+                config.execution.participant_label = sorted(selected_subjects)
+                build_log.info(
+                    f"Processing specified participants: "
+                    f"{', '.join(config.execution.participant_label)}"
+                )
+            else:
+                config.execution.participant_label = sorted(all_subjects)
+                build_log.info(
+                    f'Processing all {len(all_subjects)} participants found in BIDS dataset.'
                 )
 
-            missing_sessions = selected_sessions - found_sessions_for_participants
-            if missing_sessions:
-                 build_log.warning(
-                      f'Specified session labels not found for *all* selected participants: '
-                      f'{", ".join(sorted(missing_sessions))}. '
-                      'Ensure these sessions exist for the intended participants.'
-                 )
+            # Validate / Select sessions (if --session-id was used)
+            if config.execution.session_label:
+                selected_sessions = set(config.execution.session_label)
+                found_sessions_for_participants = set()
+                for subj in config.execution.participant_label:
+                    found_sessions_for_participants.update(
+                         layout.get_sessions(subject=subj) or []
+                    )
 
-            config.execution.session_label = sorted(selected_sessions)
-            build_log.info(
-                 f"Filtering input data by specified sessions: "
-                 f"{', '.join(config.execution.session_label)}"
-            )
-        else:
-            build_log.info(
-                'Processing all sessions found for the selected participants.'
-            )
+                missing_sessions = selected_sessions - found_sessions_for_participants
+                if missing_sessions:
+                     build_log.warning(
+                          f'Specified session labels not found for *all* selected participants: '
+                          f'{", ".join(sorted(missing_sessions))}. '
+                          'Ensure these sessions exist for the intended participants.'
+                     )
+
+                config.execution.session_label = sorted(selected_sessions)
+                build_log.info(
+                     f"Filtering input data by specified sessions: "
+                     f"{', '.join(config.execution.session_label)}"
+                )
+            else:
+                build_log.info(
+                    'Processing all sessions found for the selected participants.'
+                )
 
     # --- Collect T1w file list --- #
-    if config.execution.layout:
-        try:
-            config.execution.t1w_list = config.execution.layout.get(
-                suffix='T1w',
-                extension=['.nii', '.nii.gz'],
-                return_type='file',
-            )
-
-            if not config.execution.t1w_list:
-                err_msg = (
-                    f'No T1w files found for participants: {config.execution.participant_label} '
-                    f'and sessions: {config.execution.session_label}. '
-                    f'Check BIDS dataset and filters.'
+    if config.execution.analysis_level != 'group':
+        if config.execution.layout:
+            try:
+                config.execution.t1w_list = config.execution.layout.get(
+                    suffix='T1w',
+                    extension=['.nii', '.nii.gz'],
+                    return_type='file',
                 )
-                build_log.critical(err_msg)
-                parser.error(err_msg) # Exit cleanly via parser error
-            else:
-                build_log.info(f'Found {len(config.execution.t1w_list)} T1w files for processing.')
-        except (bids.exceptions.PyBIDSException, ValueError) as e:
-            build_log.critical(f'Error querying BIDS layout for T1w files: {e}')
-            sys.exit(1)
-    else:
-        # Handle case where layout couldn't be created earlier (e.g., skip-validation failed)
-        build_log.critical('BIDS layout not available, cannot collect T1w files.')
-        sys.exit(1)
+
+                if not config.execution.t1w_list:
+                    err_msg = (
+                        f'No T1w files found for participants: '
+                        f'{config.execution.participant_label} '
+                        f'and sessions: {config.execution.session_label}. '
+                        f'Check BIDS dataset and filters.'
+                    )
+                    build_log.critical(err_msg)
+                    parser.error(err_msg) # Exit cleanly via parser error
+                else:
+                    build_log.info(f'Found {len(config.execution.t1w_list)} T1w files for processing.')
+            except (bids.exceptions.PyBIDSException, ValueError) as e:
+                build_log.critical(f'Error querying BIDS layout for T1w files: {e}')
+                sys.exit(1)
+        else:
+            # Handle case where layout couldn't be created earlier (e.g., skip-validation failed)
+            # or if analysis_level is 'group' and layout wasn't created.
+            build_log.critical(
+                'BIDS layout not available or not applicable for T1w collection '
+                'in group mode.'
+            )
+            # For group mode, this is not an error, so we don't exit.
+            # For participant mode, if layout is None here, it implies an
+            # earlier exit or critical error.
+            if config.execution.analysis_level != 'group':
+                 sys.exit(1) # Exit only if participant mode and layout is missing
 
     # --- Final Path Checks ---
     # Ensure output_dir is not inside bids_dir

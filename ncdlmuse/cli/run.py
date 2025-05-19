@@ -280,7 +280,8 @@ def main():
     # This section is now only for participant level, as group level exits early.
     # Import build_workflow here as it's participant-specific.
     from .workflow import build_workflow
-    from bids.layout import BIDSLayout, BIDSLayoutIndexer # Needed for participant workflow
+    # Needed for participant workflow
+    from bids.layout import BIDSLayout, BIDSLayoutIndexer
 
     # Set up a dictionary for retrieving workflow results
     with Manager() as mgr:
@@ -312,9 +313,10 @@ def main():
     workflow.config['execution']['crashdump_dir'] = str(config.execution.log_dir)
     for node in workflow.list_node_names():
         node_config = workflow.get_node(node).config or {}  # Handle None case
-        if any(req in node_config for req in (
+        memory_or_cpu_reqs = (
             'memory_gb', 'memory_mb', 'num_threads', 'num_cpus'
-            )):
+        )
+        if any(req in node_config for req in memory_or_cpu_reqs):
             workflow.get_node(node).config = node_config  # Ensure config exists
             workflow.get_node(node).config['rules'] = False
 
