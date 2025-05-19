@@ -6,7 +6,7 @@
 About
 *****
 
-This is a BIDS-App wrapper for `NiChart DLMUSE <https://github.com/CBICA/NiChart_DLMUSE/tree/main>`_, a tool for brain mask extraction, and brain segmentation.
+This is a BIDS-App wrapper for `NiChart DLMUSE <https://github.com/CBICA/NiChart_DLMUSE/tree/main>`_, a tool for brain mask extraction, brain segmentation and getting ROI volumes.
 
 Installation
 ------------
@@ -51,7 +51,8 @@ For more options:
 
 More information and documentation can be found at https://cbica.github.io/NiChart_DLMUSE.
 
-Using Singularity:
+Using Singularity (Recommended):
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
@@ -79,5 +80,4 @@ Using Singularity:
            ncdlmuse.sif \
                 /data \
                 /out \
-                group \
-                --work-dir /work
+                group
