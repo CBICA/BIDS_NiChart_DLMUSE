@@ -13,7 +13,6 @@ a hard-limited memory-scope.
 def build_workflow(config_file, retval):
     """Create the Nipype Workflow that supports the whole execution graph."""
     import re
-    from pathlib import Path
 
     from bids.layout import BIDSLayout, BIDSLayoutIndexer
 
@@ -27,34 +26,39 @@ def build_workflow(config_file, retval):
     # --- Re-initialize BIDS Layout in this process --- #
     # The layout object doesn't serialize/deserialize properly across processes
     # via the config file. Recreate it here using loaded config paths.
-    build_log = config.loggers.workflow # Get logger after config load
+    build_log = config.loggers.workflow  # Get logger after config load
     try:
         indexer = BIDSLayoutIndexer(
             validate=not config.execution.skip_bids_validation,
             ignore=(
-                'code', 'stimuli', 'sourcedata', 'models', 'derivatives',
-                 re.compile(r'^\.') # Ignore hidden files/dirs
+                'code',
+                'stimuli',
+                'sourcedata',
+                'models',
+                'derivatives',
+                re.compile(r'^\.'),  # Ignore hidden files/dirs
             ),
         )
         # Use database path from config if available, otherwise let BIDSLayout manage it
         db_path = config.execution.bids_database_dir
-        reset_db = bool(db_path is None) # Reset if no specific path is given
+        reset_db = bool(db_path is None)  # Reset if no specific path is given
         layout = BIDSLayout(
             str(config.execution.bids_dir),
             database_path=db_path,
-            reset_database=reset_db, # Force fresh index if db_path is None or reuse if specified
+            reset_database=reset_db,  # Force fresh index if db_path is None or reuse if specified
             indexer=indexer,
         )
-        config.execution.layout = layout # Store the layout object back into config
+        config.execution.layout = layout  # Store the layout object back into config
         build_log.info('Successfully re-initialized BIDS Layout for workflow building process.')
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         build_log.critical(f'Failed to re-initialize BIDS Layout in workflow builder: {e}')
         # Optionally, provide more details
         import traceback
+
         build_log.error(f'Full Traceback:\n{traceback.format_exc()}')
-        retval['return_code'] = 1 # Indicate failure
+        retval['return_code'] = 1  # Indicate failure
         retval['workflow'] = None
-        return retval # Exit early if layout fails
+        return retval  # Exit early if layout fails
     # -------------------------------------------------- #
 
     version = config.environment.version
@@ -77,7 +81,9 @@ def build_workflow(config_file, retval):
     if config.execution.reports_only:
         from ncdlmuse.data import load as load_data
 
-        build_log.log(25, 'Running --reports-only on participants %s', ', '.join(subject_list_for_logging))
+        build_log.log(
+            25, 'Running --reports-only on participants %s', ', '.join(subject_list_for_logging)
+        )
         session_list = config.execution.session_label
         build_log.warning('Reports-only mode might need layout object, check implementation.')
 
@@ -91,9 +97,9 @@ def build_workflow(config_file, retval):
         return retval
 
     participant_filter = (
-    ", ".join(config.execution.participant_label)
-    if config.execution.participant_label
-    else 'All'
+        ', '.join(config.execution.participant_label)
+        if config.execution.participant_label
+        else 'All'
     )
     init_msg = [
         "Building NCDLMUSE's workflow:",

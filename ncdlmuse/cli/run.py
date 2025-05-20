@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 #
@@ -25,18 +24,19 @@
 """The main command-line interface for ncdlmuse."""
 
 import gc
-import logging
 import os
 import sys
 import warnings
 from multiprocessing import Manager, Process
 
-# Filter warnings that are visible datetime import during process execution
-# See https://github.com/nipreps/fmriprep/issues/2871
-warnings.filterwarnings("ignore", message=".*already loaded.*packaging.*")
-warnings.filterwarnings("ignore", message=".*is non-raw schema type.*")
+from bids.layout import BIDSLayout, BIDSLayoutIndexer
 
 from .. import data
+
+# Filter warnings that are visible datetime import during process execution
+# See https://github.com/nipreps/fmriprep/issues/2871
+warnings.filterwarnings('ignore', message='.*already loaded.*packaging.*')
+warnings.filterwarnings('ignore', message='.*is non-raw schema type.*')
 
 def main():
     """Entry point for ncdlmuse BIDS App.
@@ -55,11 +55,10 @@ def main():
     import subprocess
     from pathlib import Path
 
-    from nipype import config as ncfg, logging as nlogging
     from .. import config
-    from .parser import parse_args
-    from ..workflows.group import aggregate_volumes
     from ..utils.bids import write_derivative_description
+    from ..workflows.group import aggregate_volumes
+    from .parser import parse_args
 
     # Helper function to ensure dataset_description.json exists
     def ensure_dataset_description():
@@ -69,11 +68,10 @@ def main():
             desc_path = Path(config.execution.ncdlmuse_dir) / 'dataset_description.json'
             if not desc_path.exists():
                 write_derivative_description(
-                    config.execution.bids_dir,
-                    config.execution.ncdlmuse_dir
+                    config.execution.bids_dir, config.execution.ncdlmuse_dir
                 )
             return True
-        except Exception as e:
+        except (OSError, PermissionError) as e:
             config.loggers.cli.warning(f'Error creating dataset_description.json: {e}')
             return False
 
@@ -91,8 +89,8 @@ def main():
         if not ensure_dataset_description():
             # Log warning but proceed with aggregation attempt
             config.loggers.cli.warning(
-                "Failed to create dataset_description.json for the group output directory. "
-                "Attempting aggregation regardless."
+                'Failed to create dataset_description.json for the group output directory. '
+                'Attempting aggregation regardless.'
             )
 
         try:
@@ -101,18 +99,18 @@ def main():
                 output_file=group_output_file,
             )
             config.loggers.cli.info(
-                f"Finished aggregating ROI volumes. Results are in {group_output_file}."
+                f'Finished aggregating ROI volumes. Results are in {group_output_file}.'
             )
         except FileNotFoundError:
             config.loggers.cli.warning(
-                f"Not found any JSON files with ROI volumes for aggregation in {output_dir}."
+                f'Not found any JSON files with ROI volumes for aggregation in {output_dir}.'
             )
             # This is a warning, not necessarily a failure of the command itself.
             # If this should be an error, set retcode = 1
-        except Exception as e:
+        except (ValueError, OSError) as e:
             config.loggers.cli.critical(f'Group aggregation failed: {e}', exc_info=True)
             retcode = 1
-        return retcode # Exit after group processing
+        return retcode  # Exit after group processing
 
     # --- Participant-level analysis and other modes (reports-only, boilerplate) ---
 
@@ -125,8 +123,12 @@ def main():
             # --- Initialize BIDS Layout --- #
             # Copied/adapted from parser.py
             ignore_patterns = (
-                'code', 'stimuli', 'sourcedata', 'models',
-                'derivatives', re.compile(r'^\\.') # Hidden files
+                'code',
+                'stimuli',
+                'sourcedata',
+                'models',
+                'derivatives',
+                re.compile(r'^\\.'),  # Hidden files
             )
             bids_indexer = BIDSLayoutIndexer(
                 validate=not config.execution.skip_bids_validation,
@@ -139,7 +141,7 @@ def main():
                 database_path=None,  # Use in-memory DB for reports-only
                 indexer=bids_indexer,
                 reset_database=True,
-                derivatives=str(config.execution.ncdlmuse_dir)  # Include derivatives directory
+                derivatives=str(config.execution.ncdlmuse_dir),  # Include derivatives directory
             )
             config.execution.layout = layout
 
@@ -151,15 +153,15 @@ def main():
                 config.loggers.cli.error(f'Layout object is invalid or None: {layout}')
                 return 1  # Exit if layout is bad
             # end debug
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             config.loggers.cli.critical(f'Could not initialize BIDSLayout: {e}')
             return 1
 
         config.loggers.cli.info('Running solely the reporting module')
-        
+
         # Ensure dataset_description.json exists
         ensure_dataset_description()
-        
+
         exit_code = generate_reports(
             subject_list=config.execution.participant_label,
             output_dir=config.execution.ncdlmuse_dir,
@@ -172,19 +174,24 @@ def main():
 
     # Build-only run (e.g., generating boilerplate)
     if config.execution.boilerplate_only:
-        from ..reports.individual import generate_reports
+        import json  # For writing dataset_description.json
+
         # Imports needed for BIDSLayout initialization
         import re
-        from bids.layout import BIDSLayout, BIDSLayoutIndexer
-        import json # For writing dataset_description.json
+
+        from ..reports.individual import generate_reports
 
         # Initialize the layout from the config file
         try:
             # --- Initialize BIDS Layout --- #
             # Copied/adapted from parser.py
             ignore_patterns = (
-                'code', 'stimuli', 'sourcedata', 'models',
-                'derivatives', re.compile(r'^\\.') # Hidden files
+                'code',
+                'stimuli',
+                'sourcedata',
+                'models',
+                'derivatives',
+                re.compile(r'^\\.'),  # Hidden files
             )
             bids_indexer = BIDSLayoutIndexer(
                 validate=not config.execution.skip_bids_validation,
@@ -200,28 +207,28 @@ def main():
                 desc_content = {
                     'Name': 'NCDLMUSE Reportlets',
                     'BIDSVersion': '1.10.0',
-                    'GeneratedBy': [{'Name': 'ncdlmuse'}]
+                    'GeneratedBy': [{'Name': 'ncdlmuse'}],
                 }
                 with open(desc_file, 'w') as f:
                     json.dump(desc_content, f, indent=2)
 
             layout = BIDSLayout(
                 root=str(config.execution.bids_dir),
-                database_path=None, # Use in-memory DB for reports-only
+                database_path=None,  # Use in-memory DB for reports-only
                 indexer=bids_indexer,
                 reset_database=True,
-                derivatives=str(reportlets_path_for_layout) # Index reportlets dir
+                derivatives=str(reportlets_path_for_layout),  # Index reportlets dir
             )
-            config.execution.layout = layout # Store layout in config
-        except Exception as e:
+            config.execution.layout = layout  # Store layout in config
+        except (OSError, ValueError, RuntimeError) as e:
             config.loggers.cli.critical(f'Could not initialize BIDSLayout: {e}')
             return 1
 
         config.loggers.cli.info('Generating boilerplate text only. Workflow will not be executed.')
-        
+
         # Ensure dataset_description.json exists
         ensure_dataset_description()
-        
+
         # Generate boilerplate
         exit_code = generate_reports(
             subject_list=config.execution.participant_label,
@@ -236,7 +243,7 @@ def main():
 
     # 2. Setup environment
     # Set up maximum number of cores available to nipype
-    n_procs = config.nipype.n_procs
+    # n_procs is used by nipype's plugin system when needed
 
     # Set OMP_NUM_THREADS
     omp_nthreads = config.nipype.omp_nthreads
@@ -249,6 +256,7 @@ def main():
     mem_gb = config.nipype.mem_gb
     if mem_gb:
         from niworkflows.utils.misc import setup_mcr
+
         try:
             setup_mcr(mem_gb)
         except RuntimeError as e:
@@ -258,7 +266,12 @@ def main():
     # 3. Check dependencies
     # Check NiChart_DLMUSE availability
     try:
-        retcode = subprocess.check_call(['NiChart_DLMUSE', '--version'])
+        # Use shutil.which to find the full path to the executable
+        from shutil import which
+        dlmuse_path = which('NiChart_DLMUSE')
+        if not dlmuse_path:
+            raise FileNotFoundError('NiChart_DLMUSE executable not found in PATH')
+        retcode = subprocess.check_call([dlmuse_path, '--version'])
         if retcode != 0:
             raise RuntimeError
         config.loggers.cli.info('Found NiChart_DLMUSE executable.')
@@ -268,18 +281,17 @@ def main():
         )
         return 1
 
-
     # 4. Build workflow in an isolated process
     config.loggers.cli.info(
         f'Building ncdlmuse workflow (analysis level: {config.execution.analysis_level}).'
     )
     config_file = config.execution.log_dir / 'ncdlmuse.toml'
-    
+
     # This section is now only for participant level, as group level exits early.
     # Import build_workflow here as it's participant-specific.
-    from .workflow import build_workflow
     # Needed for participant workflow
-    from bids.layout import BIDSLayout, BIDSLayoutIndexer
+
+    from .workflow import build_workflow
 
     # Set up a dictionary for retrieving workflow results
     with Manager() as mgr:
@@ -304,16 +316,14 @@ def main():
         try:
             workflow.write_graph(graph2use='colored', format='svg', simple_form=True)
             config.loggers.cli.info('Workflow graph saved to work directory.')
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             config.loggers.cli.warning(f'Could not save workflow graph: {e}')
 
     # Check workflow for errors before running
     workflow.config['execution']['crashdump_dir'] = str(config.execution.log_dir)
     for node in workflow.list_node_names():
         node_config = workflow.get_node(node).config or {}  # Handle None case
-        memory_or_cpu_reqs = (
-            'memory_gb', 'memory_mb', 'num_threads', 'num_cpus'
-        )
+        memory_or_cpu_reqs = ('memory_gb', 'memory_mb', 'num_threads', 'num_cpus')
         if any(req in node_config for req in memory_or_cpu_reqs):
             workflow.get_node(node).config = node_config  # Ensure config exists
             workflow.get_node(node).config['rules'] = False
@@ -321,11 +331,11 @@ def main():
     # 5. Execute workflow (participant level only for now)
     retcode = 0
     if config.execution.analysis_level == 'participant' and workflow:
-        gc.collect() # Clean up memory before running
+        gc.collect()  # Clean up memory before running
         config.loggers.cli.info('Starting participant-level workflow execution.')
         try:
             workflow.run(**config.nipype.get_plugin())
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError) as e:
             config.loggers.cli.critical(f'Workflow execution failed: {e}')
             retcode = 1
         else:
@@ -337,7 +347,7 @@ def main():
         from ..reports.individual import generate_reports
 
         config.loggers.cli.info('Generating final reports.')
-        
+
         # Ensure dataset_description.json exists for participant output
         ensure_dataset_description()
 
@@ -360,18 +370,18 @@ def main():
                 log_file = Path(config.execution.ncdlmuse_dir) / 'pypeline.log'
                 log_file.unlink(missing_ok=True)
             except OSError:
-                pass # Ignore errors if file couldn't be deleted
+                pass  # Ignore errors if file couldn't be deleted
     else:
         config.loggers.cli.warning('Skipping report generation due to workflow execution failure.')
 
     config.loggers.cli.info(
         f'Execution finished. Exit code: {retcode}'
-        f" ({config.execution.participant_label or 'group'})"
+        f' ({config.execution.participant_label or "group"})'
     )
     return retcode
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # This is only run when script is executed directly,
     # e.g., python ncdlmuse/cli/run.py
     # The primary entry point is via `ncdlmuse` command (setup.py) or `python -m ncdlmuse.cli`

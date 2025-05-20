@@ -77,8 +77,8 @@ def _to_gb(value):
     """Convert memory size string to gigabytes."""
     scale = {'G': 1, 'T': 10**3, 'M': 1e-3, 'K': 1e-6, 'B': 1e-9}
     value_str = str(value).strip().upper()
-    digits = ''.join([c for c in value_str if c.isdigit() or c == '.']) # Allow decimals
-    units = value_str[len(digits) :] or 'G' # Default to Gigabytes if no unit
+    digits = ''.join([c for c in value_str if c.isdigit() or c == '.'])  # Allow decimals
+    units = value_str[len(digits) :] or 'G'  # Default to Gigabytes if no unit
 
     if not digits:
         raise ValueError(f'Could not extract numeric value from memory string: {value}')
@@ -86,7 +86,7 @@ def _to_gb(value):
     try:
         digits_float = float(digits)
     except ValueError as e:
-         raise ValueError(f'Invalid numeric value for memory size: {digits}') from e
+        raise ValueError(f'Invalid numeric value for memory size: {digits}') from e
 
     unit_char = units[0] if units else 'G'
     if unit_char not in scale:
@@ -109,7 +109,7 @@ def _process_value(value):
     """Process special BIDS query values (*, None)."""
     import bids
 
-    if value is None or value == 'NONE': # Handle string 'NONE' too
+    if value is None or value == 'NONE':  # Handle string 'NONE' too
         return bids.layout.Query.NONE
     elif value == '*':
         return bids.layout.Query.ANY
@@ -143,7 +143,8 @@ def _bids_filter(value, parser):
             return loads(path.read_text(), object_hook=_filter_pybids_none_any)
         except JSONDecodeError as e:
             raise parser.error(
-                f'JSON syntax error in BIDS filter file: <{path}>. Error: {e}') from e
+                f'JSON syntax error in BIDS filter file: <{path}>. Error: {e}'
+            ) from e
         except OSError as e:
             raise parser.error(f'Could not read BIDS filter file: <{path}>. Error: {e}') from e
     elif isinstance(value, str):
@@ -173,7 +174,7 @@ def _build_parser():
     parser = ArgumentParser(
         description=f'NCDLMUSE: BIDS-App wrapper for NiChart DLMUSE v{config.environment.version}',
         formatter_class=ArgumentDefaultsHelpFormatter,
-        add_help=False, # Add help manually later
+        add_help=False,  # Add help manually later
     )
 
     # Helper functions bound to the parser instance for error reporting
@@ -196,15 +197,15 @@ def _build_parser():
     required.add_argument(
         'output_dir',
         action='store',
-        type=Path, # Validation happens later in parse_args
+        type=Path,  # Validation happens later in parse_args
         help='The directory where results should be stored.',
     )
     required.add_argument(
         'analysis_level',
         choices=['participant', 'group'],
         help=(
-             'Level of the analysis that will be performed. Multiple participant level analyses '
-             'can be run independently (in parallel) using the same output_dir.'
+            'Level of the analysis that will be performed. Multiple participant level analyses '
+            'can be run independently (in parallel) using the same output_dir.'
         ),
     )
 
@@ -247,7 +248,7 @@ def _build_parser():
         '--bids-filter-file',
         dest='bids_filters',
         action='store',
-        type=BIDSFilter, # Uses the combined file/string parser
+        type=BIDSFilter,  # Uses the combined file/string parser
         metavar='PATH|JSON',
         help=(
             'Path to a JSON file OR a JSON string defining PyBIDS filters '
@@ -274,7 +275,7 @@ def _build_parser():
     g_bids.add_argument(
         '-d',
         '--derivatives',
-        action=ToDict, # Use the custom action
+        action=ToDict,  # Use the custom action
         metavar='NAME=PATH',
         nargs='+',
         help=(
@@ -358,7 +359,7 @@ def _build_parser():
         '--mem-gb',
         dest='mem_gb',
         action='store',
-        type=_to_gb, # Use GB converter
+        type=_to_gb,  # Use GB converter
         metavar='SIZE',
         help='Upper bound memory limit for NCDLMUSE processes (e.g., 8G).',
     )
@@ -383,7 +384,7 @@ def _build_parser():
         help=(
             'Path where intermediate results should be stored. Defaults to '
             '<output_dir>/ncdlmuse_wf/'
-        )
+        ),
     )
     g_perfm.add_argument(
         '--resource-monitor',
@@ -407,15 +408,19 @@ def _build_parser():
     # --- Workflow Subset Options ---
     g_subset = parser.add_argument_group('Options for performing only a subset of the workflow')
     g_subset.add_argument(
-        '--boilerplate-only', '--boilerplate_only',
-        action='store_true', default=False,
-        help='Generate boilerplate script and exit.'
+        '--boilerplate-only',
+        '--boilerplate_only',
+        action='store_true',
+        default=False,
+        help='Generate boilerplate script and exit.',
     )
     g_subset.add_argument(
-        '--reports-only', action='store_true', default=False,
+        '--reports-only',
+        action='store_true',
+        default=False,
         help=(
             "Only generate reports, don't run workflows. Assumes workflows finished successfully."
-        )
+        ),
     )
 
     # --- Output Modulation Options ---
@@ -425,45 +430,63 @@ def _build_parser():
         dest='aggr_ses_reports',
         action='store',
         type=PositiveInt,
-        default=4, # Match aslprep default, adjust if needed
+        default=4,  # Match aslprep default, adjust if needed
         help=(
             "Maximum number of sessions aggregated in one subject's visual report. "
             'If exceeded, visual reports are split by session. Default: %(default)s.'
         ),
     )
     g_outputs.add_argument(
-        '--md-only-boilerplate', action='store_true', default=False,
-        help='Skip generation of HTML and LaTeX formatted citation boilerplate.'
+        '--md-only-boilerplate',
+        action='store_true',
+        default=False,
+        help='Skip generation of HTML and LaTeX formatted citation boilerplate.',
     )
     g_outputs.add_argument(
-        '--write-graph', action='store_true', default=False,
-        help='Write workflow graph (.dot/.svg).'
+        '--write-graph',
+        action='store_true',
+        default=False,
+        help='Write workflow graph (.dot/.svg).',
     )
 
     # --- Other Options ---
     g_other = parser.add_argument_group('Other options')
     g_other.add_argument(
-        '--config-file', action='store', metavar='FILE', type=IsFile,
+        '--config-file',
+        action='store',
+        metavar='FILE',
+        type=IsFile,
         help='Use pre-generated configuration file.',
     )
-    g_other.add_argument(
-        '-h', '--help', action='help', help='Show this help message and exit.'
-    )
+    g_other.add_argument('-h', '--help', action='help', help='Show this help message and exit.')
     g_other.add_argument('--version', action='version', version=verstr)
     g_other.add_argument(
-        '-v', '--verbose', dest='verbose_count', action='count', default=0,
+        '-v',
+        '--verbose',
+        dest='verbose_count',
+        action='count',
+        default=0,
         help='Increases log verbosity for each occurrence (up to -vvv for DEBUG).',
     )
     g_other.add_argument(
-        '--notrack', action='store_true', default=False,
+        '--notrack',
+        action='store_true',
+        default=False,
         help='Opt-out of sending Sentry usage tracking information.',
     )
     g_other.add_argument(
-        '--debug', action='store', nargs='+', choices=config.DEBUG_MODES + ('all',),
+        '--debug',
+        action='store',
+        nargs='+',
+        choices=config.DEBUG_MODES + ('all',),
         help="Enable debug mode(s). Use 'all' for all modes.",
     )
     g_other.add_argument(
-        '--random-seed', dest='_random_seed', action='store', type=int, default=None,
+        '--random-seed',
+        dest='_random_seed',
+        action='store',
+        type=int,
+        default=None,
         help='Initialize the random seed for the workflow for reproducibility.',
     )
 
@@ -485,8 +508,8 @@ def _build_parser():
                 'Please check documentation for upgrade instructions.',
                 file=sys.stderr,
             )
-    except RuntimeError as e: # Changed from Exception
-         print(f'WARNING: Could not check for latest version: {e}', file=sys.stderr)
+    except RuntimeError as e:  # Changed from Exception
+        print(f'WARNING: Could not check for latest version: {e}', file=sys.stderr)
 
     try:
         is_flagged_res = is_flagged()
@@ -500,9 +523,8 @@ def _build_parser():
             )
     except RuntimeError as e:
         print(
-            f'WARNING: Could not check if version '
-            f'{config.environment.version} is flagged: {e}',
-            file=sys.stderr
+            f'WARNING: Could not check if version {config.environment.version} is flagged: {e}',
+            file=sys.stderr,
         )
 
     return parser
@@ -531,12 +553,12 @@ def parse_args(args=None, namespace=None):
 
     # 2. Set up run_uuid (either new or loaded) BEFORE applying CLI args
     # This ensures CLI args related to directories use the correct UUID
-    config.execution.run_uuid # Accessing it initializes if not already set
+    _ = config.execution.run_uuid  # Accessing it initializes if not already set
 
     # 3. Apply CLI arguments (overriding file config and defaults)
     cli_vars = vars(opts)
-    config.from_dict(cli_vars, init=False) # Use config's internal update mechanism
-    config.execution.cmdline = sys.argv[:] # Store the full command line
+    config.from_dict(cli_vars, init=False)  # Use config's internal update mechanism
+    config.execution.cmdline = sys.argv[:]  # Store the full command line
 
     # --- Explicitly map DLMUSE options ---
     # Ensure CLI args for DLMUSE are correctly mapped to workflow.dlmuse_* config
@@ -546,8 +568,9 @@ def parse_args(args=None, namespace=None):
     if cli_vars.get('model_folder') is not None:
         config.workflow.dlmuse_model_folder = cli_vars['model_folder']
     if cli_vars.get('dlmuse_derived_roi_mappings_file') is not None:
-        config.workflow.dlmuse_derived_roi_mappings_file = \
-            cli_vars['dlmuse_derived_roi_mappings_file']
+        config.workflow.dlmuse_derived_roi_mappings_file = cli_vars[
+            'dlmuse_derived_roi_mappings_file'
+        ]
     if cli_vars.get('dlmuse_muse_roi_mappings_file') is not None:
         config.workflow.dlmuse_muse_roi_mappings_file = cli_vars['dlmuse_muse_roi_mappings_file']
     # Booleans are always present in cli_vars (True/False), so update directly
@@ -570,7 +593,7 @@ def parse_args(args=None, namespace=None):
     # Determine log_level early and set CLI logger level for console output for all modes
     log_level = int(max(25 - 5 * config.execution.verbose_count, logging.DEBUG))
     config.execution.log_level = log_level
-    config.loggers.cli.setLevel(log_level) # Basic console logger
+    config.loggers.cli.setLevel(log_level)  # Basic console logger
     build_log = config.loggers.cli
 
     # Initialize config_file_path to be defined in both branches
@@ -580,20 +603,19 @@ def parse_args(args=None, namespace=None):
         # === PARTICIPANT LEVEL (or other non-group workflows) ===
 
         # --- Work Dir ---
-        if opts.work_dir: # Check opts directly for work_dir to override loaded config
+        if opts.work_dir:  # Check opts directly for work_dir to override loaded config
             config.execution.work_dir = opts.work_dir.resolve()
-        elif not config.execution.work_dir: # If not in opts and not in loaded config
+        elif not config.execution.work_dir:  # If not in opts and not in loaded config
             config.execution.work_dir = config.execution.output_dir / 'ncdlmuse_wf'
-        else: # work_dir was in loaded config, resolve it
+        else:  # work_dir was in loaded config, resolve it
             config.execution.work_dir = Path(config.execution.work_dir).resolve()
         config.execution.work_dir.mkdir(exist_ok=True, parents=True)
         build_log.info(f'Using working directory: {config.execution.work_dir}')
 
         # --- Log Dir & File Logging Setup ---
         log_dir_base = config.execution.ncdlmuse_dir / 'logs'
-        run_uuid = config.execution.run_uuid # Ensure run_uuid is accessed/initialized
-        if (config.execution.participant_label and
-                len(config.execution.participant_label) == 1):
+        run_uuid = config.execution.run_uuid  # Ensure run_uuid is accessed/initialized
+        if config.execution.participant_label and len(config.execution.participant_label) == 1:
             subj_label = config.execution.participant_label[0]
             config.execution.log_dir = (
                 config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'logs' / run_uuid
@@ -606,8 +628,8 @@ def parse_args(args=None, namespace=None):
             config.execution.log_dir = log_dir_base / run_uuid
             build_log.info(f'Using default log directory: {config.execution.log_dir}')
 
-        config.execution.log_dir.mkdir(exist_ok=True, parents=True) # Create log_dir
-        _setup_logging(log_level) # Setup file-based logging into log_dir
+        config.execution.log_dir.mkdir(exist_ok=True, parents=True)  # Create log_dir
+        _setup_logging(log_level)  # Setup file-based logging into log_dir
 
         # --- Nipype Configuration ---
         nipype_settings = {
@@ -620,17 +642,23 @@ def parse_args(args=None, namespace=None):
             'execution': {
                 'crashdump_dir': str(config.execution.log_dir),
                 'stop_on_first_crash': config.nipype.stop_on_first_crash,
-                'hash_method': 'content', 'crashfile_format': 'txt',
-                'remove_unnecessary_outputs': False, 'remove_node_directories': False,
-                'check_version': False, 'get_linked_libs': config.nipype.get_linked_libs,
+                'hash_method': 'content',
+                'crashfile_format': 'txt',
+                'remove_unnecessary_outputs': False,
+                'remove_node_directories': False,
+                'check_version': False,
+                'get_linked_libs': config.nipype.get_linked_libs,
             },
             'monitoring': {
                 'enabled': config.nipype.resource_monitor,
-                'sample_frequency': '0.5', 'summary_append': True,
-            } if config.nipype.resource_monitor else {},
+                'sample_frequency': '0.5',
+                'summary_append': True,
+            }
+            if config.nipype.resource_monitor
+            else {},
         }
         nipype_config.update_config(nipype_settings)
-        nipype_config.enable_debug_mode() 
+        nipype_config.enable_debug_mode()
         for logger_name in ['nipype.workflow', 'nipype.interface', 'nipype.utils']:
             logging.getLogger(logger_name).propagate = True
         logging.getLogger('cli').propagate = False
@@ -641,22 +669,22 @@ def parse_args(args=None, namespace=None):
         config.execution.work_dir = None
         config.execution.log_dir = None
         build_log.info(
-            'Group analysis: Skipping creation of work_dir and log_dir/file-logging setup.')
-        config_file_path = None # Explicitly set to None
+            'Group analysis: Skipping creation of work_dir and log_dir/file-logging setup.'
+        )
+        config_file_path = None  # Explicitly set to None
 
-    current_config_dict = {'execution': {
-        'work_dir': config.execution.work_dir,
-        'log_dir': config.execution.log_dir
-    }}
+    current_config_dict = {
+        'execution': {'work_dir': config.execution.work_dir, 'log_dir': config.execution.log_dir}
+    }
     config.from_dict(current_config_dict, init=False)
 
     # --- Resource Management Checks ---
     if config.execution.analysis_level != 'group':
         if (
-            config.nipype.omp_nthreads is not None and
-            config.nipype.n_procs is not None and
-            config.nipype.n_procs > 0 and # Avoid division by zero or illogical checks
-            config.nipype.n_procs < config.nipype.omp_nthreads
+            config.nipype.omp_nthreads is not None
+            and config.nipype.n_procs is not None
+            and config.nipype.n_procs > 0  # Avoid division by zero or illogical checks
+            and config.nipype.n_procs < config.nipype.omp_nthreads
         ):
             build_log.warning(
                 f'Per-process threads (--omp-nthreads={config.nipype.omp_nthreads}) '
@@ -697,8 +725,12 @@ def parse_args(args=None, namespace=None):
 
             # Define ignore patterns
             ignore_patterns = (
-                'code', 'stimuli', 'sourcedata', 'models',
-                'derivatives', re.compile(r'^\.') # Correct regex for hidden files
+                'code',
+                'stimuli',
+                'sourcedata',
+                'models',
+                'derivatives',
+                re.compile(r'^\.'),  # Correct regex for hidden files
             )
 
             try:
@@ -711,10 +743,10 @@ def parse_args(args=None, namespace=None):
                     root=str(config.execution.bids_dir),
                     # Set database_path=None and reset_database=True for in-memory/fresh index
                     database_path=None,
-                    indexer=bids_indexer, # Pass the configured indexer
-                    reset_database=True, # Force fresh index
+                    indexer=bids_indexer,  # Pass the configured indexer
+                    reset_database=True,  # Force fresh index
                 )
-                config.execution.layout = layout # Store layout in config
+                config.execution.layout = layout  # Store layout in config
 
             except (bids.exceptions.PyBIDSException, OSError, ValueError) as e:
                 build_log.critical(f'PyBIDS failed to index BIDS dataset: {e}')
@@ -741,8 +773,8 @@ def parse_args(args=None, namespace=None):
                     )
                 config.execution.participant_label = sorted(selected_subjects)
                 build_log.info(
-                    f"Processing specified participants: "
-                    f"{', '.join(config.execution.participant_label)}"
+                    f'Processing specified participants: '
+                    f'{", ".join(config.execution.participant_label)}'
                 )
             else:
                 config.execution.participant_label = sorted(all_subjects)
@@ -755,27 +787,23 @@ def parse_args(args=None, namespace=None):
                 selected_sessions = set(config.execution.session_label)
                 found_sessions_for_participants = set()
                 for subj in config.execution.participant_label:
-                    found_sessions_for_participants.update(
-                         layout.get_sessions(subject=subj) or []
-                    )
+                    found_sessions_for_participants.update(layout.get_sessions(subject=subj) or [])
 
                 missing_sessions = selected_sessions - found_sessions_for_participants
                 if missing_sessions:
-                     build_log.warning(
-                          f'Specified session labels not found for *all* selected participants: '
-                          f'{", ".join(sorted(missing_sessions))}. '
-                          'Ensure these sessions exist for the intended participants.'
-                     )
+                    build_log.warning(
+                        f'Specified session labels not found for *all* selected participants: '
+                        f'{", ".join(sorted(missing_sessions))}. '
+                        'Ensure these sessions exist for the intended participants.'
+                    )
 
                 config.execution.session_label = sorted(selected_sessions)
                 build_log.info(
-                     f"Filtering input data by specified sessions: "
-                     f"{', '.join(config.execution.session_label)}"
+                    f'Filtering input data by specified sessions: '
+                    f'{", ".join(config.execution.session_label)}'
                 )
             else:
-                build_log.info(
-                    'Processing all sessions found for the selected participants.'
-                )
+                build_log.info('Processing all sessions found for the selected participants.')
 
     # --- Collect T1w file list --- #
     if config.execution.analysis_level != 'group':
@@ -795,9 +823,11 @@ def parse_args(args=None, namespace=None):
                         f'Check BIDS dataset and filters.'
                     )
                     build_log.critical(err_msg)
-                    parser.error(err_msg) # Exit cleanly via parser error
+                    parser.error(err_msg)  # Exit cleanly via parser error
                 else:
-                    build_log.info(f'Found {len(config.execution.t1w_list)} T1w files for processing.')
+                    build_log.info(
+                        f'Found {len(config.execution.t1w_list)} T1w files for processing.'
+                    )
             except (bids.exceptions.PyBIDSException, ValueError) as e:
                 build_log.critical(f'Error querying BIDS layout for T1w files: {e}')
                 sys.exit(1)
@@ -805,14 +835,13 @@ def parse_args(args=None, namespace=None):
             # Handle case where layout couldn't be created earlier (e.g., skip-validation failed)
             # or if analysis_level is 'group' and layout wasn't created.
             build_log.critical(
-                'BIDS layout not available or not applicable for T1w collection '
-                'in group mode.'
+                'BIDS layout not available or not applicable for T1w collection in group mode.'
             )
             # For group mode, this is not an error, so we don't exit.
             # For participant mode, if layout is None here, it implies an
             # earlier exit or critical error.
             if config.execution.analysis_level != 'group':
-                 sys.exit(1) # Exit only if participant mode and layout is missing
+                sys.exit(1)  # Exit only if participant mode and layout is missing
 
     # --- Final Path Checks ---
     # Ensure output_dir is not inside bids_dir
@@ -824,9 +853,11 @@ def parse_args(args=None, namespace=None):
         )
     # Ensure work_dir is not inside bids_dir
     # (unless bids_dir is explicitly '.', which is unlikely for BIDS root)
-    if (config.execution.work_dir and # This check is now safe as work_dir is None for group
-            config.execution.bids_dir != Path('.') and
-            config.execution.bids_dir in config.execution.work_dir.parents):
+    if (
+        config.execution.work_dir  # This check is now safe as work_dir is None for group
+        and config.execution.bids_dir != Path('.')
+        and config.execution.bids_dir in config.execution.work_dir.parents
+    ):
         parser.error(
             'The selected working directory is a subdirectory of the input BIDS dataset. '
             'This modifies the input dataset, which is forbidden and can lead to '
@@ -835,18 +866,18 @@ def parse_args(args=None, namespace=None):
 
     # --- Save Final Configuration ---
     try:
-        if config_file_path: # Path determined above based on analysis_level; None for group
+        if config_file_path:  # Path determined above based on analysis_level; None for group
             config.to_filename(config_file_path)
             build_log.info(f'Final configuration saved to: {config_file_path}')
         elif config.execution.analysis_level == 'group':
             build_log.info('Group analysis: Skipping saving of configuration file.')
-        else: # Should not happen if config_file_path is None only for group, but as safeguard
+        else:  # Should not happen if config_file_path is None only for group, but as safeguard
             build_log.warning(
-                'Configuration file path not determined for non-group analysis. Config not saved.')
+                'Configuration file path not determined for non-group analysis. Config not saved.'
+            )
     except OSError as e:
         err_path_msg = str(config_file_path) if config_file_path else 'an undetermined path'
         build_log.error(f'Failed to save final configuration to {err_path_msg}: {e}')
-
 
     # --- Update the config object one last time to ensure all sections are initialized ---
     # This ensures that sections not explicitly touched (like 'workflow') are generated
@@ -886,7 +917,7 @@ def _setup_logging(level):
         try:
             handler.close()
         except OSError:
-            pass # Ignore errors during handler closing
+            pass  # Ignore errors during handler closing
 
     # Set root logger level *before* adding handlers
     root_logger.setLevel(level)
@@ -894,20 +925,22 @@ def _setup_logging(level):
     # --- Console Handler ---
     # Only add console handler if level is INFO or lower (more verbose)
     # Or adjust this logic based on desired console output behavior
-    if level <= logging.INFO: # Example: Show INFO and DEBUG on console
+    if level <= logging.INFO:  # Example: Show INFO and DEBUG on console
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(log_format)
-        console_handler.setLevel(level) # Handler level respects root level
+        console_handler.setLevel(level)  # Handler level respects root level
         root_logger.addHandler(console_handler)
 
     # --- File Handler ---
     try:
         # Use RotatingFileHandler from aslprep example
         file_handler = logging.handlers.RotatingFileHandler(
-            log_file, maxBytes=5 * 1024 * 1024, backupCount=5 # 5MB limit, 5 backups
+            log_file,
+            maxBytes=5 * 1024 * 1024,
+            backupCount=5,  # 5MB limit, 5 backups
         )
         file_handler.setFormatter(log_format)
-        file_handler.setLevel(level) # Log everything >= level to file
+        file_handler.setLevel(level)  # Log everything >= level to file
         root_logger.addHandler(file_handler)
     except OSError as e:
         # Fallback or warning if file logging fails
@@ -919,7 +952,7 @@ def _setup_logging(level):
         {
             'logging': {
                 'log_directory': str(log_dir),
-                'log_to_file': False, # Disable nipype's pypeline.log file
+                'log_to_file': False,  # Disable nipype's pypeline.log file
             }
         }
     )
@@ -935,7 +968,7 @@ def _setup_logging(level):
     logging.getLogger('nipype.utils').propagate = True
 
     # Prevent double logging from our own CLI logger if it's separate
-    logging.getLogger('cli').propagate = False # Already handled by root
+    logging.getLogger('cli').propagate = False  # Already handled by root
 
     logging.getLogger('cli').info(f'Logging configured (Level: {logging.getLevelName(level)})')
     logging.getLogger('cli').info(f'Log file: {log_file}')
