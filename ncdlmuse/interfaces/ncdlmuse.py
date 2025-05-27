@@ -57,7 +57,9 @@ class NiChartDLMUSEOutputSpec(TraitedSpec):
 
     dlmuse_segmentation = File(desc='DLMUSE segmentation file (NIfTI)')
     dlicv_mask = File(desc='DLICV brain mask file (NIfTI)')
-    dlmuse_volumes = File(desc='DLMUSE volumes TSV file (with renamed headers or original CSV as fallback)')
+    dlmuse_volumes = File(
+        desc='DLMUSE volumes TSV file (with renamed headers or original CSV as fallback)'
+    )
     dlmuse_volumes_csv = File(desc='Original DLMUSE volumes CSV file (copied to output dir)')
 
 
@@ -96,7 +98,6 @@ class NiChartDLMUSE(SimpleInterface):
     **Outputs:**
 
     *   Outputs are found within the interface's working directory (runtime.cwd).
-
     """
 
     input_spec = NiChartDLMUSEInputSpec
@@ -117,7 +118,7 @@ class NiChartDLMUSE(SimpleInterface):
         raw_output_dir = self._cwd / _RAW_OUT_SUBDIR
 
         # Separate directory for input copy (sibling to cwd)
-        # Rationale: Necessary if NiChart_DLMUSE has issues with inputs/outputs 
+        # Rationale: Necessary if NiChart_DLMUSE has issues with inputs/outputs
         # in the same deep path, or requires specific relative locations.
         internal_in_dir = self._cwd.parent / f'{self._cwd.name}{_INPUT_COPY_SUBDIR_PREFIX}'
 
@@ -144,9 +145,12 @@ class NiChartDLMUSE(SimpleInterface):
         # --- 2. Build and Run Command --- #
         cmd = [
             'NiChart_DLMUSE',
-            '-i', str(internal_in_dir.resolve()), # Point -i to the directory containing the copy
-            '-o', str(raw_output_dir.resolve()), # Point -o to the raw output subdir
-            '-d', self.inputs.device,
+            '-i',
+            str(internal_in_dir.resolve()),  # Point -i to the directory containing the copy
+            '-o',
+            str(raw_output_dir.resolve()),  # Point -o to the raw output subdir
+            '-d',
+            self.inputs.device,
         ]
 
         # Add optional arguments
@@ -171,13 +175,15 @@ class NiChartDLMUSE(SimpleInterface):
             if process.stderr:
                 logger.warning(f'NiChart_DLMUSE stderr:\n{process.stderr.strip()}')
         except subprocess.CalledProcessError as e:
-            logger.error(f'NiChart_DLMUSE command failed (exit code {e.returncode}): {" ".join(e.cmd)}')
+            logger.error(
+                f'NiChart_DLMUSE command failed (exit code {e.returncode}): {" ".join(e.cmd)}'
+            )
             if e.stdout:
                 logger.error(f'  Stdout:\n{e.stdout.strip()}')
             if e.stderr:
                 logger.error(f'  Stderr:\n{e.stderr.strip()}')
             # Log contents of raw output dir for debugging
-            self._log_dir_contents(raw_output_dir, "raw output")
+            self._log_dir_contents(raw_output_dir, 'raw output')
             raise RuntimeError('NiChart_DLMUSE execution failed.') from e
         except FileNotFoundError:
             logger.error('NiChart_DLMUSE command not found. Is it installed and in PATH?')
@@ -197,8 +203,8 @@ class NiChartDLMUSE(SimpleInterface):
             missing_raw_files.append(str(raw_seg_path))
         if not raw_mask_path.exists():
             missing_raw_files.append(str(raw_mask_path))
-            if not raw_mask_path.parent.exists(): # Log missing subdir as well
-                 logger.warning(f'Raw mask subdirectory missing: {raw_mask_path.parent}')
+            if not raw_mask_path.parent.exists():  # Log missing subdir as well
+                logger.warning(f'Raw mask subdirectory missing: {raw_mask_path.parent}')
         if not raw_volumes_csv_path.exists():
             missing_raw_files.append(str(raw_volumes_csv_path))
 
@@ -208,7 +214,7 @@ class NiChartDLMUSE(SimpleInterface):
                 + ', '.join(missing_raw_files)
             )
             logger.error(error_msg)
-            self._log_dir_contents(raw_output_dir, "raw output")
+            self._log_dir_contents(raw_output_dir, 'raw output')
             raise FileNotFoundError(error_msg)
         else:
             logger.info('Essential raw output files found. Copying to final location.')
@@ -217,7 +223,7 @@ class NiChartDLMUSE(SimpleInterface):
         final_seg_path = self._cwd / raw_seg_path.name
         final_mask_subdir = self._cwd / _S2_DLICV_SUBDIR
         final_mask_path = final_mask_subdir / raw_mask_path.name
-        final_volumes_csv_path = self._cwd / raw_volumes_csv_path.name # Copy of original CSV
+        final_volumes_csv_path = self._cwd / raw_volumes_csv_path.name  # Copy of original CSV
 
         # Copy files from raw_output_dir to cwd
         try:
@@ -227,7 +233,9 @@ class NiChartDLMUSE(SimpleInterface):
             shutil.copy2(raw_mask_path, final_mask_path)
             logger.info(f'Copied {raw_mask_path.name} to {final_mask_path}')
             shutil.copy2(raw_volumes_csv_path, final_volumes_csv_path)
-            logger.info(f'Copied {raw_volumes_csv_path.name} to {final_volumes_csv_path} (original CSV)')
+            logger.info(
+                f'Copied {raw_volumes_csv_path.name} to {final_volumes_csv_path} (original CSV)'
+            )
         except Exception as e:
             logger.error(f'Error copying files from {raw_output_dir} to {self._cwd}: {e}')
             raise
@@ -236,36 +244,36 @@ class NiChartDLMUSE(SimpleInterface):
         final_volumes_tsv_path = self._cwd / _PROCESSED_VOLUMES_TSV
         self._process_volumes(final_volumes_csv_path, final_volumes_tsv_path)
 
-        logger.info(f'NiChartDLMUSE interface (_run_interface) completed successfully.')
+        logger.info('NiChartDLMUSE interface (_run_interface) completed successfully.')
         # _list_outputs will handle finding files and setting self._results
         return runtime
 
     def _process_volumes(self, input_csv_path, output_tsv_path):
         """Load volumes CSV, rename headers based on mapping, save as TSV."""
         logger.info(f'Processing volumes: {input_csv_path} -> {output_tsv_path}')
+
+        # Try to load ROI mapping from package data
+        id_to_name = {}
         try:
-            # Load ROI mapping from package data
-            id_to_name = {}
-            try:
-                mapping_file_res = importlib_resources.files('ncdlmuse.data') / _ROI_MAPPING_FILE
-                if mapping_file_res.is_file():
-                    with importlib_resources.as_file(mapping_file_res) as mapping_file_path:
-                        mapping_df = pd.read_csv(mapping_file_path)
-                        mapping_df['ID'] = mapping_df['ID'].astype(str) # Ensure ID is string for matching
-                        id_to_name = mapping_df.set_index('ID')['Full_Name'].to_dict()
-                        logger.info(f'Loaded {len(id_to_name)} ROI mappings from package data.')
-                else:
-                    logger.warning(f'ROI mapping file not found: {mapping_file_res}')
-            except Exception as e:
-                logger.error(f'Error loading ROI mapping file: {e}. Proceeding without renaming.')
+            mapping_file_res = importlib_resources.files('ncdlmuse.data') / _ROI_MAPPING_FILE
+            with importlib_resources.as_file(mapping_file_res) as mapping_file_path:
+                mapping_df = pd.read_csv(mapping_file_path)
+                mapping_df['ID'] = mapping_df['ID'].astype(str)  # Ensure ID is string
+                id_to_name = mapping_df.set_index('ID')['Full_Name'].to_dict()
+                logger.info(f'Loaded {len(id_to_name)} ROI mappings from package data.')
+        except FileNotFoundError:
+            logger.warning(f'ROI mapping file not found: {mapping_file_res}')
+        except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+            logger.error(f'Error parsing ROI mapping file: {e}. Proceeding without renaming.')
+        except OSError as e:
+            logger.error(f'Error accessing ROI mapping file: {e}. Proceeding without renaming.')
 
-            # Load the original volumes CSV (already copied to cwd)
+        # Read and process volumes CSV
+        try:
             volumes_df = pd.read_csv(input_csv_path)
-
-            # Rename columns if mapping is available
             if id_to_name:
                 # Convert original columns to string for matching keys in id_to_name
-                original_cols_str = [str(col) for col in volumes_df.columns]
+                original_cols_str = volumes_df.columns.astype(str)
                 new_columns = [id_to_name.get(col_str, col_str) for col_str in original_cols_str]
                 volumes_df.columns = new_columns
                 logger.info('Renamed volume columns using ROI mapping.')
@@ -273,25 +281,27 @@ class NiChartDLMUSE(SimpleInterface):
                 logger.info('No ROI mapping loaded, volume columns not renamed.')
 
             # Save as TSV
-            volumes_df.to_csv(output_tsv_path, index=False, sep='\t')
+            volumes_df.to_csv(output_tsv_path, sep='\t', index=False)
             logger.info(f'Successfully wrote processed volumes TSV to: {output_tsv_path}')
 
         except pd.errors.EmptyDataError:
             logger.error(f'Input volumes CSV is empty: {input_csv_path}. Cannot generate TSV.')
             # Do not raise error here, _list_outputs will handle fallback
-        except Exception as e:
+        except (pd.errors.ParserError, OSError) as e:
             logger.error(f'Error processing volumes file {input_csv_path}: {e}')
             # Do not raise error here, _list_outputs will handle fallback
 
-    def _log_dir_contents(self, directory, label="directory"):
+    def _log_dir_contents(self, directory, label='directory'):
         """Helper to log the contents of a directory, especially on error."""
         try:
             if Path(directory).is_dir():
                 dir_contents = os.listdir(directory)
                 logger.info(f'Contents of {label} ({directory}): {dir_contents}')
             else:
-                logger.warning(f'{label.capitalize()} directory not found or not a directory: {directory}')
-        except Exception as list_e:
+                logger.warning(
+                    f'{label.capitalize()} directory not found or not a directory: {directory}'
+                )
+        except OSError as list_e:
             logger.error(f'Could not list contents of {label} directory {directory}: {list_e}')
 
     def _list_outputs(self):
@@ -300,7 +310,7 @@ class NiChartDLMUSE(SimpleInterface):
 
         if not self._cwd or not self._cwd.is_dir():
             # This case should ideally not happen if _run_interface succeeded
-            logger.critical(f'[_list_outputs] Working directory (self._cwd) not set or invalid!')
+            logger.critical('[_list_outputs] Working directory (self._cwd) not set or invalid!')
             # Attempt fallback, but this indicates a problem
             self._cwd = Path(os.getcwd()).resolve()
             logger.warning(f'[_list_outputs] Falling back to os.getcwd(): {self._cwd}')
@@ -331,7 +341,7 @@ class NiChartDLMUSE(SimpleInterface):
             outputs['dlmuse_segmentation'] = str(final_seg_path.resolve())
             logger.info(f'[_list_outputs] Found segmentation: {outputs["dlmuse_segmentation"]}')
         else:
-            self._log_dir_contents(self._cwd, "final working")
+            self._log_dir_contents(self._cwd, 'final working')
             raise FileNotFoundError(
                 f'DLMUSE segmentation output not found in working directory: {final_seg_path}'
             )
@@ -341,16 +351,20 @@ class NiChartDLMUSE(SimpleInterface):
             outputs['dlicv_mask'] = str(final_mask_path.resolve())
             logger.info(f'[_list_outputs] Found mask: {outputs["dlicv_mask"]}')
         else:
-            self._log_dir_contents(self._cwd / _S2_DLICV_SUBDIR, "final mask")
-            raise FileNotFoundError(f'DLICV mask output not found in working directory: {final_mask_path}')
+            self._log_dir_contents(self._cwd / _S2_DLICV_SUBDIR, 'final mask')
+            raise FileNotFoundError(
+                f'DLICV mask output not found in working directory: {final_mask_path}'
+            )
 
         # --- Check for and assign primary volumes output (TSV preferred, fallback to CSV) --- #
         volumes_assigned = False
         if processed_volumes_tsv_path.exists():
             outputs['dlmuse_volumes'] = str(processed_volumes_tsv_path.resolve())
             volumes_assigned = True
-            logger.info(f'[_list_outputs] Found processed volumes TSV: {outputs["dlmuse_volumes"]}')
-        elif final_volumes_csv_path.exists(): # Check for the *copied* original CSV in cwd
+            logger.info(
+                f'[_list_outputs] Found processed volumes TSV: {outputs["dlmuse_volumes"]}'
+            )
+        elif final_volumes_csv_path.exists():  # Check for the *copied* original CSV in cwd
             outputs['dlmuse_volumes'] = str(final_volumes_csv_path.resolve())
             volumes_assigned = True
             logger.warning(
@@ -359,19 +373,24 @@ class NiChartDLMUSE(SimpleInterface):
             )
 
         if not volumes_assigned:
-            self._log_dir_contents(self._cwd, "final working")
+            self._log_dir_contents(self._cwd, 'final working')
             raise FileNotFoundError(
-                f'Neither processed volumes TSV ({processed_volumes_tsv_path.name}) ' 
-                f'nor copied original CSV ({final_volumes_csv_path.name}) were found in {self._cwd}.'
+                f'Neither processed volumes TSV ({processed_volumes_tsv_path.name}) '
+                f'nor copied original CSV ({final_volumes_csv_path.name}) were found in '
+                f'{self._cwd}.'
             )
 
         # --- Assign original volumes CSV output (points to the copy in cwd) --- #
         if final_volumes_csv_path.exists():
             outputs['dlmuse_volumes_csv'] = str(final_volumes_csv_path.resolve())
-            logger.info(f'[_list_outputs] Found copied original CSV: {outputs["dlmuse_volumes_csv"]}')
+            logger.info(
+                f'[_list_outputs] Found copied original CSV: {outputs["dlmuse_volumes_csv"]}'
+            )
         else:
             # This is unexpected if the fallback above worked, but log just in case
-            logger.warning(f'[_list_outputs] Copied original CSV not found: {final_volumes_csv_path}')
+            logger.warning(
+                f'[_list_outputs] Copied original CSV not found: {final_volumes_csv_path}'
+            )
             # Don't assign if not found
 
         # Log final state before returning
