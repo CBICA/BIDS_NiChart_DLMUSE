@@ -32,6 +32,9 @@ _DLICV_SUFFIX = '_DLICV.nii.gz'
 _VOLUMES_CSV_SUFFIX = '_DLMUSE_Volumes.csv'
 _PROCESSED_VOLUMES_TSV = 'dlmuse_volumes_renamed.tsv'
 _ROI_MAPPING_FILE = 'MUSE_ROI_complete_list.csv'
+
+# Log level constants
+_IMPORTANT_LEVEL = 25  # matches logging.addLevelName(25, 'IMPORTANT') in config
 # ---------------------------------------------
 
 
@@ -167,21 +170,21 @@ class NiChartDLMUSE(SimpleInterface):
         if self.inputs.clear_cache:
             cmd.append('--clear_cache')
 
-        logger.info(f'Running command: {" ".join(cmd)}')
+        logger.log(_IMPORTANT_LEVEL, f'Running command: {" ".join(cmd)}')
         try:
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
             # Always report on stdout, even if empty
             if process.stdout:
-                logger.info(f'NiChart_DLMUSE stdout:\n{process.stdout.strip()}')
+                logger.log(_IMPORTANT_LEVEL, f'NiChart_DLMUSE stdout:\n{process.stdout.strip()}')
             else:
-                logger.info('NiChart_DLMUSE stdout: (empty)')
+                logger.log(_IMPORTANT_LEVEL, 'NiChart_DLMUSE stdout: (empty)')
 
             # Report stderr (which often contains progress bars)
             if process.stderr:
-                logger.info(f'NiChart_DLMUSE stderr:\n{process.stderr.strip()}')
+                logger.log(_IMPORTANT_LEVEL, f'NiChart_DLMUSE stderr:\n{process.stderr.strip()}')
             else:
-                logger.info('NiChart_DLMUSE stderr: (empty)')
+                logger.log(_IMPORTANT_LEVEL, 'NiChart_DLMUSE stderr: (empty)')
 
         except subprocess.CalledProcessError as e:
             logger.error(
@@ -253,7 +256,9 @@ class NiChartDLMUSE(SimpleInterface):
         final_volumes_tsv_path = self._cwd / _PROCESSED_VOLUMES_TSV
         self._process_volumes(final_volumes_csv_path, final_volumes_tsv_path)
 
-        logger.info('NiChartDLMUSE interface (_run_interface) completed successfully.')
+        logger.log(
+            _IMPORTANT_LEVEL, 'NiChartDLMUSE interface (_run_interface) completed successfully.'
+        )
         # _list_outputs will handle finding files and setting self._results
         return runtime
 
@@ -291,7 +296,9 @@ class NiChartDLMUSE(SimpleInterface):
 
             # Save as TSV
             volumes_df.to_csv(output_tsv_path, sep='\t', index=False)
-            logger.info(f'Successfully wrote processed volumes TSV to: {output_tsv_path}')
+            logger.log(
+                _IMPORTANT_LEVEL, f'Successfully wrote processed volumes TSV to: {output_tsv_path}'
+            )
 
         except pd.errors.EmptyDataError:
             logger.error(f'Input volumes CSV is empty: {input_csv_path}. Cannot generate TSV.')
