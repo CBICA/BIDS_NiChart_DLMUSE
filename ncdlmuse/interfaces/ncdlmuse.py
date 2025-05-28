@@ -1,12 +1,9 @@
 # interfaces/ncdlmuse.py
 """Interface to NiChart_DLMUSE."""
 
-import logging
 import os
 import shutil
 import subprocess
-
-# Use importlib.resources for package data
 from importlib import resources as importlib_resources
 from pathlib import Path
 
@@ -19,9 +16,12 @@ from nipype.interfaces.base import (
     traits,
 )
 
-# Configure logger
-logger = logging.getLogger('nipype.interface')  # Use standard nipype logger name
-_logger = logging.getLogger('nipype.interface')  # Define _logger for _list_outputs
+from .. import config
+
+# Use standardized logger
+logger = config.loggers.getLogger('ncdlmuse.interfaces.ncdlmuse')
+# Define _logger for _list_outputs
+_logger = config.loggers.getLogger('ncdlmuse.interfaces.ncdlmuse')
 
 # --- Constants for filenames and directories ---
 _RAW_OUT_SUBDIR = 'ncdlmuse_raw_out'

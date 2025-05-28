@@ -317,7 +317,7 @@ class nipype(_Config):
     """Settings for NiPype's execution plugin."""
     plugin_file = None
     """Path to Nipype plugin configuration file."""
-    resource_monitor = False
+    resource_monitor = True
     """Enable resource monitor."""
     stop_on_first_crash = True
     """Whether the workflow should stop or continue after the first error."""
@@ -427,8 +427,6 @@ class execution(_Config):
     """Write out the computational graph corresponding to the planned preprocessing."""
     hires = False
     """Request higher resolution outputs produced using native-resolution T1w images."""
-    derivatives = None
-    """Path(s) to pre-computed derivatives."""
     t1w_list: list[str] | None = None
     """List of T1w file paths identified for processing."""
 
@@ -490,18 +488,20 @@ class execution(_Config):
                 # or let BIDSLayout handle it if the path is then unusable.
                 # For now, let's assume BIDSLayout will manage if path is None.
 
+        # Recommended after PyBIDS 12.1
+        indexer = BIDSLayoutIndexer(
+            validate=not cls.skip_bids_validation,
+            ignore=(
+                'code',  # Irrelevant folders for BIDS Layout
+                'stimuli',
+                'sourcedata',
+                'models',
+                re.compile(r'^/\.\w+'),  # Hidden files/folders
+            ),
+        )
+
         # Setup the BIDSLayout
         try:
-            indexer = BIDSLayoutIndexer(
-                validate=not cls.skip_bids_validation,
-                ignore=(
-                    'code',  # Irrelevant folders for BIDS Layout
-                    'stimuli',
-                    'sourcedata',
-                    'models',
-                    re.compile(r'^/\.\w+'),  # Hidden files/folders
-                ),
-            )
             cls._layout = BIDSLayout(
                 str(cls.bids_dir),
                 database_path=cls._db_path,  # cls._db_path is now robustly defined or None
@@ -512,6 +512,7 @@ class execution(_Config):
                 indexer=indexer,
             )
             cls.bids_description_hash = cls._layout.description.__hash__()
+            cls.bids_database_dir = cls._db_path
 
         except (bids.exceptions.PyBIDSException, OSError, ValueError, TypeError) as e:
             # Handle layout initialization errors
@@ -520,8 +521,32 @@ class execution(_Config):
             # Decide if this should be fatal or allow continuation
             # For now, let later checks handle missing layout if needed
 
+        cls.layout = cls._layout
+
+        if cls.bids_filters:
+            from bids.layout import Query
+
+            def _process_value(value):
+                """Convert string with "Query" in it to Query object."""
+                if isinstance(value, list):
+                    return [_process_value(val) for val in value]
+                else:
+                    return (
+                        getattr(Query, value[7:-4])
+                        if not isinstance(value, Query) and 'Query' in value
+                        else value
+                    )
+
+            # unserialize pybids Query enum values
+            for acq, filters in cls.bids_filters.items():
+                for k, v in filters.items():
+                    cls.bids_filters[acq][k] = _process_value(v)
+
         if cls._layout and cls.participant_label is None:
             cls.participant_label = cls._layout.get_subjects()
+
+        if 'all' in cls.debug:
+            cls.debug = list(DEBUG_MODES)
 
 
 # These variables are not necessary anymore
@@ -562,7 +587,7 @@ class workflow(_Config):
 class loggers:
     """Keep loggers easily accessible (see :py:func:`init`)."""
 
-    _fmt = '%(asctime)s %(name)s %(levelname)s:\n\t %(message)s'
+    _fmt = '%(asctime)s,%(msecs)d %(name)-2s %(levelname)-2s:\n\t %(message)s'
     _datefmt = '%y%m%d-%H:%M:%S'
 
     default = logging.getLogger()
@@ -588,56 +613,37 @@ class loggers:
         """
         from nipype import config as ncfg
 
-        # Setup for cli logger
         if not cls.cli.hasHandlers():
-            _handler_cli = logging.StreamHandler(stream=sys.stdout)
-            _handler_cli.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
-            cls.cli.addHandler(_handler_cli)
-
-        # Prevent CLI logger from propagating to root to avoid duplicate messages
-        cls.cli.propagate = False
-
-        # Ensure root logger (cls.default) has a console handler if none exist
-        # This is crucial for group mode where _setup_logging might be skipped.
-        if not cls.default.hasHandlers():
-            _handler_root_console = logging.StreamHandler(stream=sys.stdout)
-            _handler_root_console.setFormatter(
-                logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt)
-            )
-            # Set handler level to the general execution log level
-            # The root logger's level will also be set below, this ensures handler passes messages.
-            _handler_root_console.setLevel(execution.log_level)
-            cls.default.addHandler(_handler_root_console)
-
+            _handler = logging.StreamHandler(stream=sys.stdout)
+            _handler.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+            cls.cli.addHandler(_handler)
         cls.default.setLevel(execution.log_level)
         cls.cli.setLevel(execution.log_level)
         cls.interface.setLevel(execution.log_level)
         cls.workflow.setLevel(execution.log_level)
         cls.utils.setLevel(execution.log_level)
-
-        # Prevent nipype loggers from propagating to root to avoid duplicate messages
-        cls.workflow.propagate = False
-        cls.interface.propagate = False
-        cls.utils.propagate = False
-
-        # Add handlers to nipype loggers since they don't propagate to root anymore
-        for nipype_logger in [cls.workflow, cls.interface, cls.utils]:
-            if not nipype_logger.hasHandlers():
-                _handler_nipype = logging.StreamHandler(stream=sys.stdout)
-                _handler_nipype.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
-                _handler_nipype.setLevel(execution.log_level)
-                nipype_logger.addHandler(_handler_nipype)
-
         ncfg.update_config(
-            {
-                'logging': {
-                    'log_directory': str(execution.log_dir),
-                    'log_to_file': True,
-                    'log_format': cls._fmt,
-                    'datefmt': '%%y%%m%%d-%%H:%%M:%%S',  # Double %% for ConfigParser
-                }
-            }
+            {'logging': {'log_directory': str(execution.log_dir), 'log_to_file': True}}
         )
+
+    @classmethod
+    def getLogger(cls, name):
+        """Get a logger with the proper ncdlmuse configuration."""
+        logger = logging.getLogger(name)
+        logger.setLevel(execution.log_level)
+
+        # Set up handler if it doesn't have one
+        if not logger.hasHandlers():
+            handler = logging.StreamHandler(stream=sys.stdout)
+            handler.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+            handler.setLevel(execution.log_level)
+            logger.addHandler(handler)
+
+        # Prevent propagation to avoid duplicates unless it's a nipype logger
+        if not name.startswith('nipype'):
+            logger.propagate = False
+
+        return logger
 
 
 class seeds(_Config):

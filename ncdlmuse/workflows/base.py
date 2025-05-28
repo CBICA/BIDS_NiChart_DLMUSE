@@ -3,7 +3,6 @@
 """NCDLMUSE base processing workflows."""
 
 import json
-import logging
 import os
 import re
 import shutil
@@ -36,7 +35,7 @@ from ..interfaces.reports import (
 )
 from ..utils.bids import get_entities_from_file
 
-LOGGER = config.loggers.workflow
+LOGGER = config.loggers.getLogger('ncdlmuse.workflows.base')
 
 
 def init_ncdlmuse_wf(name='ncdlmuse_wf'):
@@ -1061,7 +1060,7 @@ def _create_volumes_json_file(
         # Convert to lowercase and remove leading/trailing underscores
         return s3.lower().strip('_')
 
-    LOGGER = config.loggers.workflow
+    LOGGER = config.loggers.getLogger('ncdlmuse.workflows.base')
 
     # --- Read ROI Name Mapping --- #
     roi_mapping = {}
@@ -1242,7 +1241,7 @@ def _select_first_from_list(file_input):
 
     from ncdlmuse import config
 
-    _LOGGER_INSIDE_FUNCTION = config.loggers.workflow
+    _LOGGER_INSIDE_FUNCTION = config.loggers.getLogger('ncdlmuse.workflows.base')
 
     path_to_check = None
     if isinstance(file_input, list):
@@ -1283,7 +1282,7 @@ def _select_first_from_list_or_none(file_input):
 
     from ncdlmuse import config
 
-    _LOGGER_INSIDE_FUNCTION = config.loggers.workflow
+    _LOGGER_INSIDE_FUNCTION = config.loggers.getLogger('ncdlmuse.workflows.base')
 
     path_to_check = None
     if isinstance(file_input, list):

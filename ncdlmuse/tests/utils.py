@@ -7,9 +7,10 @@ from glob import glob
 import nibabel as nb
 import numpy as np
 from bids.layout import BIDSLayout
-from nipype import logging
 
-LOGGER = logging.getLogger('nipype.utils')
+from .. import config
+
+LOGGER = config.loggers.getLogger('ncdlmuse.tests.utils')
 
 
 def get_test_data_path():

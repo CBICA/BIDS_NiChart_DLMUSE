@@ -5,12 +5,13 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import re
 from pathlib import Path
 
-LOGGER = logging.getLogger('ncdlmuse.utils.bids')
+from .. import config
+
+LOGGER = config.loggers.getLogger('ncdlmuse.utils.bids')
 
 
 def get_entities_from_file(file_path, layout=None):
