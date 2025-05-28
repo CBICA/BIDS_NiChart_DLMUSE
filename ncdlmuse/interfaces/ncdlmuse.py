@@ -170,10 +170,19 @@ class NiChartDLMUSE(SimpleInterface):
         logger.info(f'Running command: {" ".join(cmd)}')
         try:
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+            # Always report on stdout, even if empty
             if process.stdout:
                 logger.info(f'NiChart_DLMUSE stdout:\n{process.stdout.strip()}')
+            else:
+                logger.info('NiChart_DLMUSE stdout: (empty)')
+
+            # Report stderr (which often contains progress bars)
             if process.stderr:
-                logger.warning(f'NiChart_DLMUSE stderr:\n{process.stderr.strip()}')
+                logger.info(f'NiChart_DLMUSE stderr:\n{process.stderr.strip()}')
+            else:
+                logger.info('NiChart_DLMUSE stderr: (empty)')
+
         except subprocess.CalledProcessError as e:
             logger.error(
                 f'NiChart_DLMUSE command failed (exit code {e.returncode}): {" ".join(e.cmd)}'
