@@ -126,9 +126,19 @@ def test_get_parser_blacklist(monkeypatch, capsys, flagged):
         (MIN_ARGS, 'workflow', 'dlmuse_all_in_gpu', False),
         ([*MIN_ARGS, '--all-in-gpu'], 'workflow', 'dlmuse_all_in_gpu', True),
         # Test string arguments
-        ([*MIN_ARGS, '--model-folder=/custom/model'], 'workflow', 'dlmuse_model_folder', '/custom/model'),
+        (
+            [*MIN_ARGS, '--model-folder=/custom/model'],
+            'workflow',
+            'dlmuse_model_folder',
+            '/custom/model'
+        ),
         # Test participant label
-        ([*MIN_ARGS, '--participant-label', '01', '02'], 'execution', 'participant_label', ['01', '02']),
+        (
+            [*MIN_ARGS, '--participant-label', '01', '02'],
+            'execution',
+            'participant_label',
+            ['01', '02']
+        ),
         # Test BIDS validation skipping
         (MIN_ARGS, 'execution', 'skip_bids_validation', False),
         ([*MIN_ARGS, '--skip-bids-validation'], 'execution', 'skip_bids_validation', True),
@@ -143,9 +153,9 @@ def test_parser_arguments(arg_list, config_section, config_key, expected_value):
     processed_args = []
     for arg in arg_list:
         if arg == 'data/':
-            processed_args.append('/tmp/data') # Use dummy path
+            processed_args.append('/tmp/data')  # Use dummy path  # noqa: S108
         elif arg == 'out/':
-            processed_args.append('/tmp/out') # Use dummy path
+            processed_args.append('/tmp/out')  # Use dummy path  # noqa: S108
         else:
             processed_args.append(arg)
 
@@ -173,9 +183,9 @@ def test_parser_failures(arg_list, error_type, error_match):
     processed_args = []
     for arg in arg_list:
         if arg == 'data/':
-            processed_args.append('/tmp/data') # Use dummy path
+            processed_args.append('/tmp/data')  # Use dummy path  # noqa: S108
         elif arg == 'out/':
-            processed_args.append('/tmp/out') # Use dummy path
+            processed_args.append('/tmp/out')  # Use dummy path  # noqa: S108
         else:
             processed_args.append(arg)
 

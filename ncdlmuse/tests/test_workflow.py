@@ -17,7 +17,9 @@ from ncdlmuse.workflows.base import init_ncdlmuse_wf, init_single_subject_wf
         ('02', 'test'),  # With session
     ]
 )
-def test_init_single_subject_wf_structure(bids_skeleton_factory, work_dir, out_dir, subject_id, session_id):
+def test_init_single_subject_wf_structure(
+    bids_skeleton_factory, work_dir, out_dir, subject_id, session_id
+):
     """Test the basic structure of the single subject workflow with different entities."""
     bids_dir, t1w_file = bids_skeleton_factory(subject_id=subject_id, session_id=session_id)
 

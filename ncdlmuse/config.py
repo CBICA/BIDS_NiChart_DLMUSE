@@ -597,9 +597,11 @@ class loggers:
         # This is crucial for group mode where _setup_logging might be skipped.
         if not cls.default.hasHandlers():
             _handler_root_console = logging.StreamHandler(stream=sys.stdout)
-            _handler_root_console.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+            _handler_root_console.setFormatter(
+                logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt)
+            )
             # Set handler level to the general execution log level
-            # The root logger's level will also be set below, this ensures the handler passes messages.
+            # The root logger's level will also be set below, this ensures handler passes messages.
             _handler_root_console.setLevel(execution.log_level)
             cls.default.addHandler(_handler_root_console)
 

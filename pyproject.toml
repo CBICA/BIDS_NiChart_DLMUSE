@@ -157,6 +157,7 @@ inline-quotes = "single"
 "ncdlmuse/utils/debug.py" = ["A002", "T100"]
 "docs/conf.py" = ["A001"]
 "docs/sphinxext/github_link.py" = ["BLE001"]
+"ncdlmuse/workflows/base.py" = ["F401", "F811"]
 
 [tool.ruff.format]
 quote-style = "single"

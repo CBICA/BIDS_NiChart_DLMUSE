@@ -9,7 +9,7 @@ import pytest
 from ncdlmuse.interfaces.ncdlmuse import NiChartDLMUSE
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def synthetic_t1w_file(tmp_path):
     """Creates just the synthetic T1w file."""
     t1w_data = np.zeros((10, 10, 10), dtype=np.float32)

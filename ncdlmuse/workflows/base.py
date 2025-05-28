@@ -945,6 +945,7 @@ def _copy_atlas_mapping(source_tsv_path_str, output_dir_str):
 # --- Helper function for copying --- #
 def _copy_single_file(in_file, out_file):
     """Copies a single file using shutil.copy2, creating destination directory."""
+    import shutil
     from pathlib import Path
     out_path = Path(out_file)
     # Ensure parent directory exists
