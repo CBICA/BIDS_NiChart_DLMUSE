@@ -14,6 +14,44 @@ import pytest
 # --- End CLI option fixtures ---
 
 
+@pytest.fixture(autouse=True)
+def reset_config():
+    """Reset the global config before each test to prevent state leakage."""
+    from ncdlmuse import config
+
+    # Reset execution config
+    config.execution.participant_label = None
+    config.execution.session_label = None
+    config.execution.layout = None
+    config.execution.bids_dir = None
+    config.execution.output_dir = None
+    config.execution.work_dir = None
+    config.execution.ncdlmuse_dir = None
+    config.execution.log_dir = None
+    config.execution.skip_bids_validation = False
+    config.execution.t1w_list = None
+
+    # Reset workflow config
+    config.workflow.dlmuse_device = None
+    config.workflow.dlmuse_model_folder = None
+    config.workflow.dlmuse_derived_roi_mappings_file = None
+    config.workflow.dlmuse_muse_roi_mappings_file = None
+    config.workflow.dlmuse_all_in_gpu = False
+    config.workflow.dlmuse_disable_tta = False
+    config.workflow.dlmuse_clear_cache = False
+
+    # Reset nipype config
+    config.nipype.n_procs = 1
+    config.nipype.omp_nthreads = None
+
+    yield  # Run the test
+
+    # Clean up after test (optional, but good practice)
+    config.execution.participant_label = None
+    config.execution.session_label = None
+    config.execution.layout = None
+
+
 def _generate_bids_skeleton(base_path, subject_id='01', session_id=None):
     """Helper function to create a BIDS skeleton."""
     bids_dir = base_path / 'bids_root'

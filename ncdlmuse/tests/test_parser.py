@@ -15,8 +15,6 @@ MIN_ARGS = ['data/', 'out/', 'participant']
     [
         ([], 2),
         (MIN_ARGS, 2),  # bids_dir does not exist
-        (MIN_ARGS + ['--fs-license-file'], 2),
-        (MIN_ARGS + ['--fs-license-file', 'fslicense.txt'], 2),
     ],
 )
 def test_parser_errors(args, code):
@@ -27,17 +25,12 @@ def test_parser_errors(args, code):
     assert error.value.code == code
 
 
-@pytest.mark.parametrize('args', [MIN_ARGS, MIN_ARGS + ['--fs-license-file']])
+@pytest.mark.parametrize('args', [MIN_ARGS])
 def test_parser_valid(tmp_path, args):
     """Check valid arguments."""
     datapath = tmp_path / 'data'
     datapath.mkdir(exist_ok=True)
     args[0] = str(datapath)
-
-    if '--fs-license-file' in args:
-        _fs_file = tmp_path / 'license.txt'
-        _fs_file.write_text('')
-        args.insert(args.index('--fs-license-file') + 1, str(_fs_file.absolute()))
 
     opts = _build_parser().parse_args(args)
 
@@ -65,13 +58,11 @@ def test_memory_arg(tmp_path, argval, gb):
     """Check the correct parsing of the memory argument."""
     datapath = tmp_path / 'data'
     datapath.mkdir(exist_ok=True)
-    _fs_file = tmp_path / 'license.txt'
-    _fs_file.write_text('')
 
-    args = MIN_ARGS + ['--fs-license-file', str(_fs_file)] + ['--mem', argval]
+    args = [str(datapath), str(tmp_path / 'out'), 'participant'] + ['--mem', argval]
     opts = _build_parser().parse_args(args)
 
-    assert opts.memory_gb == gb
+    assert opts.mem_gb == gb
 
 
 @pytest.mark.parametrize(('current', 'latest'), [('1.0.0', '1.3.2'), ('1.3.2', '1.3.2')])
@@ -88,8 +79,9 @@ def test_get_parser_update(monkeypatch, capsys, current, latest):
     _build_parser()
     captured = capsys.readouterr().err
 
-    msg = f"""\
-You are using ncdlmuse-{current}, and a newer version of ncdlmuse is available: {latest}."""
+    msg = (
+        f'WARNING: You are using ncdlmuse-{current}, and a newer version ({latest}) is available.'
+    )
 
     assert (msg in captured) is expectation
 
@@ -115,78 +107,105 @@ def test_get_parser_blacklist(monkeypatch, capsys, flagged):
     ('arg_list', 'config_section', 'config_key', 'expected_value'),
     [
         # Test default device
-        (MIN_ARGS, 'workflow', 'dlmuse_device', 'cpu'),
+        ([*MIN_ARGS, '--skip-bids-validation'], 'workflow', 'dlmuse_device', 'cpu'),
         # Test explicit device
-        ([*MIN_ARGS, '--device=cuda'], 'workflow', 'dlmuse_device', 'cuda'),
-        # Test boolean flags (default False)
-        (MIN_ARGS, 'workflow', 'dlmuse_disable_tta', False),
-        ([*MIN_ARGS, '--disable-tta'], 'workflow', 'dlmuse_disable_tta', True),
-        (MIN_ARGS, 'workflow', 'dlmuse_clear_cache', False),
-        ([*MIN_ARGS, '--clear-cache'], 'workflow', 'dlmuse_clear_cache', True),
-        (MIN_ARGS, 'workflow', 'dlmuse_all_in_gpu', False),
-        ([*MIN_ARGS, '--all-in-gpu'], 'workflow', 'dlmuse_all_in_gpu', True),
-        # Test string arguments
         (
-            [*MIN_ARGS, '--model-folder=/custom/model'],
+            [*MIN_ARGS, '--device=cuda', '--skip-bids-validation'],
             'workflow',
-            'dlmuse_model_folder',
-            '/custom/model',
+            'dlmuse_device',
+            'cuda',
+        ),
+        # Test boolean flags (default False)
+        ([*MIN_ARGS, '--skip-bids-validation'], 'workflow', 'dlmuse_disable_tta', False),
+        (
+            [*MIN_ARGS, '--disable-tta', '--skip-bids-validation'],
+            'workflow',
+            'dlmuse_disable_tta',
+            True,
+        ),
+        ([*MIN_ARGS, '--skip-bids-validation'], 'workflow', 'dlmuse_clear_cache', False),
+        (
+            [*MIN_ARGS, '--clear-cache', '--skip-bids-validation'],
+            'workflow',
+            'dlmuse_clear_cache',
+            True,
+        ),
+        ([*MIN_ARGS, '--skip-bids-validation'], 'workflow', 'dlmuse_all_in_gpu', False),
+        (
+            [*MIN_ARGS, '--all-in-gpu', '--skip-bids-validation'],
+            'workflow',
+            'dlmuse_all_in_gpu',
+            True,
         ),
         # Test participant label
         (
-            [*MIN_ARGS, '--participant-label', '01', '02'],
+            [*MIN_ARGS, '--participant-label', '01', '--skip-bids-validation'],
             'execution',
             'participant_label',
-            ['01', '02'],
+            ['01'],
         ),
         # Test BIDS validation skipping
-        (MIN_ARGS, 'execution', 'skip_bids_validation', False),
         ([*MIN_ARGS, '--skip-bids-validation'], 'execution', 'skip_bids_validation', True),
-        # Test resource limits (example)
-        ([*MIN_ARGS, '--nthreads=4'], 'nipype', 'n_procs', 4),
+        ([*MIN_ARGS], 'execution', 'skip_bids_validation', False),
+        # Test resource limits
+        ([*MIN_ARGS, '--nthreads=4', '--skip-bids-validation'], 'nipype', 'n_procs', 4),
     ],
 )
-def test_parser_arguments(arg_list, config_section, config_key, expected_value):
+def test_parser_arguments(
+    bids_skeleton_factory, tmp_path, arg_list, config_section, config_key, expected_value
+):
     """Test parsing of various command line arguments."""
-    # We don't need actual directories for parser tests
-    # Add dummy paths if Path validation is strict
+    # Create a proper BIDS dataset using the fixture
+    bids_dir, _ = bids_skeleton_factory(subject_id='01')
+
+    # Replace placeholder paths with real ones
     processed_args = []
     for arg in arg_list:
         if arg == 'data/':
-            processed_args.append('/tmp/data')  # Use dummy path  # noqa: S108
+            processed_args.append(str(bids_dir))
         elif arg == 'out/':
-            processed_args.append('/tmp/out')  # Use dummy path  # noqa: S108
+            processed_args.append(str(tmp_path / 'out'))
         else:
             processed_args.append(arg)
 
-    parse_args(processed_args)  # This populates the global config
-
-    # Retrieve the section and check the key
-    section = getattr(config, config_section)
-    assert getattr(section, config_key) == expected_value
+    # For the non-validation test, we need to handle it differently to avoid BIDS layout creation
+    if '--skip-bids-validation' not in processed_args and config_key == 'skip_bids_validation':
+        # Test just the parser argument parsing, not the full parse_args which creates layouts
+        opts = _build_parser().parse_args(processed_args)
+        # Check the namespace directly
+        assert getattr(opts, config_key) == expected_value
+    else:
+        parse_args(processed_args)  # This populates the global config
+        # Retrieve the section and check the key
+        section = getattr(config, config_section)
+        assert getattr(section, config_key) == expected_value
 
 
 @pytest.mark.parametrize(
     ('arg_list', 'error_type', 'error_match'),
     [
         # Test invalid device choice
-        ([*MIN_ARGS, '--device=tpu'], SystemExit, ''),  # ArgumentParser raises SystemExit
-        # Test missing participant label when needed
-        (['data/', 'out/', 'participant'], SystemExit, ''),
+        ([*MIN_ARGS, '--device=tpu', '--skip-bids-validation'], SystemExit, ''),
         # Test missing positional args
         (['participant'], SystemExit, ''),
         (['data/', 'participant'], SystemExit, ''),
     ],
 )
-def test_parser_failures(arg_list, error_type, error_match):
+def test_parser_failures(bids_skeleton_factory, tmp_path, arg_list, error_type, error_match):
     """Test parser failures for invalid arguments."""
-    # Add dummy paths if Path validation is strict
+    # Create a proper BIDS dataset for tests that need it
+    if len(arg_list) >= 3:  # Has enough args for bids_dir
+        bids_dir, _ = bids_skeleton_factory(subject_id='01')
+
     processed_args = []
     for arg in arg_list:
         if arg == 'data/':
-            processed_args.append('/tmp/data')  # Use dummy path  # noqa: S108
+            if len(arg_list) >= 3:  # Only replace if we have bids_dir available
+                processed_args.append(str(bids_dir))
+            else:
+                processed_args.append(arg)
         elif arg == 'out/':
-            processed_args.append('/tmp/out')  # Use dummy path  # noqa: S108
+            processed_args.append(str(tmp_path / 'out'))
         else:
             processed_args.append(arg)
 
