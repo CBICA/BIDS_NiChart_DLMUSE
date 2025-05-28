@@ -617,11 +617,27 @@ class loggers:
             _handler = logging.StreamHandler(stream=sys.stdout)
             _handler.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
             cls.cli.addHandler(_handler)
+
+        # Set levels for all loggers
         cls.default.setLevel(execution.log_level)
         cls.cli.setLevel(execution.log_level)
         cls.interface.setLevel(execution.log_level)
         cls.workflow.setLevel(execution.log_level)
         cls.utils.setLevel(execution.log_level)
+
+        # Prevent nipype loggers from propagating to avoid duplicates
+        cls.workflow.propagate = False
+        cls.interface.propagate = False
+        cls.utils.propagate = False
+
+        # Add handlers to nipype loggers since they don't propagate anymore
+        for nipype_logger in [cls.workflow, cls.interface, cls.utils]:
+            if not nipype_logger.hasHandlers():
+                _handler_nipype = logging.StreamHandler(stream=sys.stdout)
+                _handler_nipype.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+                nipype_logger.addHandler(_handler_nipype)
+
+        # Configure nipype to use our logging setup
         ncfg.update_config(
             {'logging': {'log_directory': str(execution.log_dir), 'log_to_file': True}}
         )
