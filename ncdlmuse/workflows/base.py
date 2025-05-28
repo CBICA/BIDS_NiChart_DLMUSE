@@ -9,10 +9,10 @@ import re
 import shutil
 import subprocess
 import time
+from collections import OrderedDict
 from importlib import resources as importlib_resources
 from pathlib import Path
 
-# ruff: noqa: F401
 import pandas as pd
 import torch
 from bids.layout import Query
@@ -991,7 +991,7 @@ def _to_snake_case(text):
     return s3.lower().strip('_')
 
 
-# --- Helper Function to create volumes JSON with specific BIDS name --- #
+# pyright: ignore
 def _create_volumes_json_file(
     volumes_csv,
     source_t1w_json_path,
@@ -1004,9 +1004,16 @@ def _create_volumes_json_file(
     """
 
     # Imports required within the Nipype Function execution scope
+    import json
+    import os
     import re
+    import shutil
+    import subprocess
     from collections import OrderedDict
     from pathlib import Path
+
+    import pandas as pd
+    import torch
 
     from ncdlmuse import __version__ as bids_ncdlmuse_version
     from ncdlmuse import config
