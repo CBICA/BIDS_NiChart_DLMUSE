@@ -3,8 +3,6 @@
 """Interfaces to generate reportlets."""
 
 import os
-import time
-from pathlib import Path
 
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -45,6 +43,7 @@ SUBJECT_TEMPLATE = """\
 
 # ABOUT_TEMPLATE for original NCDLMUSE AboutSummary is now removed.
 
+
 class _SummaryOutputSpec(TraitedSpec):
     out_report = File(exists=True, desc='HTML segment containing summary')
 
@@ -75,8 +74,10 @@ class SubjectSummary(SummaryInterface):
         return super()._run_interface(runtime)
 
     def _generate_segment(self):
-        brain_mask_status = "Available" if isdefined(self.inputs.brain_mask_file) else "Not available"
-        seg_status = "Available" if isdefined(self.inputs.dlmuse_seg_file) else "Not available"
+        brain_mask_status = (
+            'Available' if isdefined(self.inputs.brain_mask_file) else 'Not available'
+        )
+        seg_status = 'Available' if isdefined(self.inputs.dlmuse_seg_file) else 'Not available'
         return SUBJECT_TEMPLATE.format(
             subject_id=self.inputs.subject_id,
             session_id=getattr(self.inputs, 'session_id', 'N/A'),
@@ -94,7 +95,7 @@ UPDATED_ABOUT_TEMPLATE = """
 \t\t<li>Date processed: {timestamp}</li>
 \t</ul>
 </div>
-""" # Retaining the </div> from aslprep's example
+"""  # Retaining the </div> from aslprep's example
 
 
 class _ExecutionProvenanceInputSpec(BaseInterfaceInputSpec):
@@ -110,6 +111,7 @@ class _ExecutionProvenanceOutputSpec(_SummaryOutputSpec):
 
 class ExecutionProvenanceReportlet(SummaryInterface):
     """Generates a reportlet summarizing execution provenance details (now serves as 'About')."""
+
     input_spec = _ExecutionProvenanceInputSpec
     output_spec = _ExecutionProvenanceOutputSpec
 
@@ -142,8 +144,13 @@ ERROR_CONTENT_TEMPLATE_NO_ERRORS = """\
 
 
 class _ErrorReportletInputSpec(BaseInterfaceInputSpec):
-    error_messages = traits.List(Str, value=[], usedefault=True, mandatory=False,
-                                 desc='A list of error/status messages. Defaults to empty list.')
+    error_messages = traits.List(
+        Str,
+        value=[],
+        usedefault=True,
+        mandatory=False,
+        desc='A list of error/status messages. Defaults to empty list.',
+    )
 
 
 class _ErrorReportletOutputSpec(_SummaryOutputSpec):
@@ -152,6 +159,7 @@ class _ErrorReportletOutputSpec(_SummaryOutputSpec):
 
 class ErrorReportlet(SummaryInterface):
     """Generates an HTML reportlet from a list of error/status messages."""
+
     input_spec = _ErrorReportletInputSpec
     output_spec = _ErrorReportletOutputSpec
 
@@ -186,9 +194,10 @@ WORKFLOW_PROVENANCE_ITEM_TEMPLATE = '<li><strong>{key}:</strong> {value}</li>'
 
 class _WorkflowProvenanceReportletInputSpec(BaseInterfaceInputSpec):
     provenance_json_file = File(
-        exists=True, mandatory=True,
-        desc="Path to the JSON file containing the 'provenance' dictionary."
-        )
+        exists=True,
+        mandatory=True,
+        desc="Path to the JSON file containing the 'provenance' dictionary.",
+    )
 
 
 class _WorkflowProvenanceReportletOutputSpec(_SummaryOutputSpec):
@@ -197,6 +206,7 @@ class _WorkflowProvenanceReportletOutputSpec(_SummaryOutputSpec):
 
 class WorkflowProvenanceReportlet(SummaryInterface):
     """Generates a reportlet from a 'provenance' dictionary within a JSON file."""
+
     input_spec = _WorkflowProvenanceReportletInputSpec
     output_spec = _WorkflowProvenanceReportletOutputSpec
 
@@ -213,8 +223,9 @@ class WorkflowProvenanceReportlet(SummaryInterface):
 
     def _generate_segment(self):
         import json
+
         try:
-            with open(self.inputs.provenance_json_file, 'r') as f:
+            with open(self.inputs.provenance_json_file) as f:
                 data = json.load(f)
 
             provenance_dict = data.get('provenance')
@@ -227,24 +238,22 @@ class WorkflowProvenanceReportlet(SummaryInterface):
             # Add known keys in preferred order
             for key, display_name in self.KNOWN_PROVENANCE_KEYS.items():
                 if key in provenance_dict:
-                    value = provenance_dict.pop(key) # Remove to avoid re-adding
+                    value = provenance_dict.pop(key)  # Remove to avoid re-adding
                     items_html_list.append(
                         WORKFLOW_PROVENANCE_ITEM_TEMPLATE.format(
-                            key=display_name, 
-                            value=str(value) if value is not None else 'N/A'
+                            key=display_name, value=str(value) if value is not None else 'N/A'
                         )
                     )
-            
+
             # Add any remaining keys from the provenance_dict (sorted for consistency)
             for key, value in sorted(provenance_dict.items()):
                 display_key = key.replace('_', ' ').title()
                 items_html_list.append(
                     WORKFLOW_PROVENANCE_ITEM_TEMPLATE.format(
-                        key=display_key, 
-                        value=str(value) if value is not None else 'N/A'
+                        key=display_key, value=str(value) if value is not None else 'N/A'
                     )
                 )
-            
+
             if not items_html_list:
                 return "<p>No provenance items found in the 'provenance' dictionary.</p>"
 
@@ -257,11 +266,8 @@ class WorkflowProvenanceReportlet(SummaryInterface):
                 f'{self.inputs.provenance_json_file}</p>'
             )
         except json.JSONDecodeError:
-            return (
-                f'<p>Error: Could not decode JSON from '
-                f'{self.inputs.provenance_json_file}</p>'
-            )
-        except Exception as e:
+            return f'<p>Error: Could not decode JSON from {self.inputs.provenance_json_file}</p>'
+        except (OSError, ValueError, TypeError) as e:
             return (
                 f'<p>An unexpected error occurred while generating '
                 f'workflow provenance reportlet: {e}</p>'
@@ -279,36 +285,47 @@ SEGMENTATION_QC_TEMPLATE = """\
 
 SEGMENTATION_QC_ITEM_TEMPLATE = '<li><strong>{name}:</strong> {value:.2f}</li>'
 
-# Define a list of commonly interesting volume keys (snake_case from your _create_volumes_json_file)
+# Define a list of commonly interesting volume keys (snake_case from _create_volumes_json_file)
 # These should match the keys in the 'volumes' dictionary within the JSON file
 # after _to_snake_case and potential mapping in _create_volumes_json_file.
 DEFAULT_DISPLAY_VOLUMES = [
-    'total_gray_matter', 'total_white_matter', 'total_csf',
-    'subcortical_gray_matter', 'cortical_gray_matter',
-    'supratentorial_brain_volume', 'intracranial_volume_icv'
+    'total_gray_matter',
+    'total_white_matter',
+    'total_csf',
+    'subcortical_gray_matter',
+    'cortical_gray_matter',
+    'supratentorial_brain_volume',
+    'intracranial_volume_icv',
     # Add or modify these based on actual keys in your 'volumes' dict
 ]
 
+
 class _SegmentationQCSummaryInputSpec(BaseInterfaceInputSpec):
-    segmentation_qc_json_file = \
-        File(exists=True, mandatory=True,
-        desc="Path to the JSON file containing the 'volumes' dictionary.")
+    segmentation_qc_json_file = File(
+        exists=True,
+        mandatory=True,
+        desc="Path to the JSON file containing the 'volumes' dictionary.",
+    )
     # Optional: could allow user to specify which volume keys to display
     # display_volume_keys = traits.List(Str, value=DEFAULT_DISPLAY_VOLUMES, usedefault=True,
     #                                   desc="List of volume keys (snake_case) to display.")
 
+
 class _SegmentationQCSummaryOutputSpec(_SummaryOutputSpec):
     pass
 
+
 class SegmentationQCSummary(SummaryInterface):
     """Generates a reportlet summarizing key segmentation volumes from a JSON file."""
+
     input_spec = _SegmentationQCSummaryInputSpec
     output_spec = _SegmentationQCSummaryOutputSpec
 
     def _generate_segment(self):
         import json
+
         try:
-            with open(self.inputs.segmentation_qc_json_file, 'r') as f:
+            with open(self.inputs.segmentation_qc_json_file) as f:
                 data = json.load(f)
 
             volumes_dict = data.get('volumes')
@@ -333,7 +350,7 @@ class SegmentationQCSummary(SummaryInterface):
                         items_html_list.append(
                             SEGMENTATION_QC_ITEM_TEMPLATE.format(
                                 name=display_name, value=value_float
-                                )
+                            )
                         )
                     except (ValueError, TypeError):
                         # If value can't be float, display as is (or skip/log)
@@ -342,11 +359,11 @@ class SegmentationQCSummary(SummaryInterface):
                             f'<li><strong>{display_name}:</strong> {value} '
                             f'(could not format as number)</li>'
                         )
-            
+
             if not items_html_list:
                 return '<p>No specified segmentation volumes found in the JSON file.</p>'
 
-            volume_items_html = "\n".join(items_html_list)
+            volume_items_html = '\n'.join(items_html_list)
             return SEGMENTATION_QC_TEMPLATE.format(volume_items=volume_items_html)
 
         except FileNotFoundError:
@@ -356,10 +373,9 @@ class SegmentationQCSummary(SummaryInterface):
             )
         except json.JSONDecodeError:
             return (
-                f'<p>Error: Could not decode JSON from '
-                f'{self.inputs.segmentation_qc_json_file}</p>'
+                f'<p>Error: Could not decode JSON from {self.inputs.segmentation_qc_json_file}</p>'
             )
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             return (
                 f'<p>An unexpected error occurred while generating '
                 f'segmentation QC reportlet: {e}</p>'

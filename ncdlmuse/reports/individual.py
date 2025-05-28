@@ -20,9 +20,11 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-import shutil
+import os
+import time
 from pathlib import Path
 
+import jinja2
 from bids.layout import BIDSLayout, BIDSLayoutIndexer
 from nireports.assembler.report import Report as NireportsReport
 
@@ -42,8 +44,6 @@ class SafeReport(NireportsReport):
 
     def _load_reportlet(self, reportlet_path):
         """Override _load_reportlet to properly load and include reportlets."""
-        import os
-        import shutil
         from pathlib import Path
 
         reportlet_path = Path(reportlet_path)
@@ -55,7 +55,7 @@ class SafeReport(NireportsReport):
         if reportlet_path.suffix == '.html':
             try:
                 return reportlet_path.read_text()
-            except Exception as e:
+            except (OSError, UnicodeDecodeError) as e:
                 config.loggers.cli.error(f'Error reading HTML reportlet: {e}')
                 return None
         elif reportlet_path.suffix == '.svg':
@@ -64,7 +64,7 @@ class SafeReport(NireportsReport):
                 # The SVG files should already be in the subject's figures directory
                 # Just return the relative path to the SVG file
                 return str(reportlet_path.name)
-            except Exception as e:
+            except (OSError, UnicodeDecodeError) as e:
                 config.loggers.cli.error(f'Error handling SVG reportlet: {e}')
                 return None
 
@@ -108,7 +108,7 @@ class SafeReport(NireportsReport):
 
         try:
             super().index(settings)
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             config.loggers.cli.error(f'Error in parent index method: {e}')
 
         if not hasattr(self, 'reportlets') or not self.reportlets:
@@ -119,16 +119,7 @@ class SafeReport(NireportsReport):
 
     def generate_report(self):
         """Generate a custom HTML report using the reportlets."""
-        import os
-        import re
-        import shutil
-        import time
         from pathlib import Path
-
-        import jinja2
-        import yaml
-        from nipype.utils.filemanip import copyfile
-        from pkg_resources import resource_filename as pkgrf
 
         if not hasattr(self, 'reportlets') or not self.reportlets:
             if hasattr(self, '_manual_reportlets') and self._manual_reportlets:
@@ -155,7 +146,7 @@ class SafeReport(NireportsReport):
                 output_dir = Path(os.getcwd())
 
         # Get subject ID from the reportlets directory path if not set
-        subject_id = "Unknown"
+        subject_id = 'Unknown'
         if hasattr(self, 'subject'):
             subject_id = self.subject
         elif hasattr(self, '_reportlets_dir'):
@@ -165,14 +156,14 @@ class SafeReport(NireportsReport):
                 subject_id = reportlets_path.parent.name.replace('sub-', '')
 
         # Prepare the HTML template
-        template_str = """<!DOCTYPE html>
+        template_str = r"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="generator" content="NiReports: https://www.nipreps.org/" />
     <title>NCDLMUSE: sub-{{subject_id}}</title>
-    <link rel="stylesheet" 
+    <link rel="stylesheet"
           href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
           integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z"
           crossorigin="anonymous">
@@ -462,7 +453,7 @@ class SafeReport(NireportsReport):
                             'title': reportlet_path.stem,
                             'content': content
                         })
-                except Exception as e:
+                except (OSError, UnicodeDecodeError) as e:
                     config.loggers.cli.warning(
                         f'Error reading HTML reportlet {reportlet_path}: {e}'
                     )
@@ -496,7 +487,7 @@ class SafeReport(NireportsReport):
                 f.write(html_content)
 
             return str(output_file)
-        except Exception as e:
+        except (OSError, jinja2.TemplateError, UnicodeEncodeError) as e:
             config.loggers.cli.error(
                 f'Error generating HTML report: {e}'
             )
@@ -599,8 +590,9 @@ def generate_reports(
                 validate=False,
                 indexer=BIDSLayoutIndexer(validate=False, index_metadata=False)
             )
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             config.loggers.cli.error(f'Failed to re-create BIDSLayout: {e}')
+            return 1
 
     reportlets_dir_for_nireports = output_dir_path
 
@@ -632,7 +624,7 @@ def generate_reports(
         if n_ses <= aggr_ses_reports_threshold:
             html_report_filename = f'sub-{subject_id_for_report}.html'
         else:
-            html_report_filename = f'sub-{subject_id_for_report}.html' 
+            html_report_filename = f'sub-{subject_id_for_report}.html'
 
         try:
             final_html_path = output_dir_path / html_report_filename
@@ -671,10 +663,10 @@ def generate_reports(
                     raise FileNotFoundError(f'Report file not found: {final_html_path}')
 
                 config.loggers.cli.info(f'Successfully generated report at {final_html_path}')
-            except Exception as e:
+            except (OSError, jinja2.TemplateError, UnicodeEncodeError) as e:
                 config.loggers.cli.error(f'Report generation failed: {e}', exc_info=True)
                 report_errors.append(subject_label_with_prefix)
-        except Exception as e:
+        except (OSError, jinja2.TemplateError, UnicodeEncodeError) as e:
             config.loggers.cli.error(f'Report generation failed: {e}', exc_info=True)
             report_errors.append(subject_label_with_prefix)
 
@@ -720,7 +712,7 @@ def generate_reports(
                         f'Successfully generated session report for {subject_label_with_prefix} '
                         f'session {session_label} at {final_session_html_path}'
                     )
-                except Exception as e:
+                except (OSError, jinja2.TemplateError, UnicodeEncodeError) as e:
                     config.loggers.cli.error(
                         f'Session report generation failed for {subject_label_with_prefix} '
                         f'session {session_label}: {e}'

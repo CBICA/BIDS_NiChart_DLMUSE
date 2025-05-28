@@ -13,7 +13,6 @@ from nipype.interfaces.base import (
 )
 from niworkflows.interfaces.bids import DerivativesDataSink as BaseDerivativesDataSink
 
-from ncdlmuse import config
 from ncdlmuse.data import load as load_data
 
 # NOTE: Modified for ncdlmuse's purposes
