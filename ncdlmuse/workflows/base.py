@@ -715,11 +715,13 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     # === HTML Report Generation ===
 
     # 1. Subject Summary Report (Primary HTML Summary)
+    session_id_value = _current_t1w_entities.get('session')
+    summary_kwargs = {'subject_id': _current_t1w_entities.get('subject', 'UNKNOWN')}
+    if session_id_value is not None:
+        summary_kwargs['session_id'] = session_id_value
+
     subject_summary_node = pe.Node(
-        SubjectSummary(
-            subject_id=_current_t1w_entities.get('subject', 'UNKNOWN'),
-            session_id=_current_t1w_entities.get('session', 'N/A'),
-        ),
+        SubjectSummary(**summary_kwargs),
         name='subject_summary_node',
         run_without_submitting=True,
     )

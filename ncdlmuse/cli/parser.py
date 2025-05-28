@@ -78,7 +78,7 @@ def _to_gb(value):
     scale = {'G': 1, 'T': 10**3, 'M': 1e-3, 'K': 1e-6, 'B': 1e-9}
     value_str = str(value).strip().upper()
     digits = ''.join([c for c in value_str if c.isdigit() or c == '.'])  # Allow decimals
-    units = value_str[len(digits) :] or 'G'  # Default to Gigabytes if no unit
+    units = value_str[len(digits) :] or 'M'  # Default to MB if no unit
 
     if not digits:
         raise ValueError(f'Could not extract numeric value from memory string: {value}')
@@ -88,7 +88,7 @@ def _to_gb(value):
     except ValueError as e:
         raise ValueError(f'Invalid numeric value for memory size: {digits}') from e
 
-    unit_char = units[0] if units else 'G'
+    unit_char = units[0] if units else 'M'
     if unit_char not in scale:
         raise ValueError(f'Invalid memory unit: {unit_char}. Use one of {list(scale.keys())}')
 
@@ -748,7 +748,7 @@ def parse_args(args=None, namespace=None):
                 )
                 config.execution.layout = layout  # Store layout in config
 
-            except (bids.exceptions.PyBIDSException, OSError, ValueError) as e:
+            except (bids.exceptions.BIDSValidationError, OSError, ValueError) as e:
                 build_log.critical(f'PyBIDS failed to index BIDS dataset: {e}')
                 build_log.critical(
                     'Please check the dataset structure and PyBIDS installation. '
@@ -828,7 +828,7 @@ def parse_args(args=None, namespace=None):
                     build_log.info(
                         f'Found {len(config.execution.t1w_list)} T1w files for processing.'
                     )
-            except (bids.exceptions.PyBIDSException, ValueError) as e:
+            except (bids.exceptions.BIDSValidationError, ValueError) as e:
                 build_log.critical(f'Error querying BIDS layout for T1w files: {e}')
                 sys.exit(1)
         else:
