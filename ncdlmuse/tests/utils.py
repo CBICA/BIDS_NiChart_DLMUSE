@@ -1,19 +1,13 @@
 """Utility functions for tests."""
 
 import os
-import tarfile
 from contextlib import contextmanager
 from glob import glob
-from gzip import GzipFile
-from io import BytesIO
 
 import nibabel as nb
 import numpy as np
-import requests
 from bids.layout import BIDSLayout
 from nipype import logging
-
-from ncdlmuse import config
 
 LOGGER = logging.getLogger('nipype.utils')
 

@@ -182,7 +182,7 @@ and manages overall execution settings.
             LOGGER.info(f'Querying T1w files for {subj_sess_prefix} with params: {query_params}')
             try:
                 t1w_files = layout.get(**query_params)
-            except Exception as e:
+            except (OSError, shutil.Error) as e:
                 import traceback
                 LOGGER.error(f'Error querying BIDS layout for {subj_sess_prefix}: {e}')
                 print('--- Full Traceback --- ')
@@ -882,7 +882,6 @@ def _check_dlmuse_outputs(segmentation_file, volumes_csv_file):
 def _copy_atlas_mapping(source_tsv_path_str, output_dir_str):
     """Copy the atlas mapping TSV and JSON files to the output directory if they don't exist,
     renaming them to seg-DLMUSE_dseg.*."""
-    import os
     import shutil
     from pathlib import Path
 
@@ -938,7 +937,7 @@ def _copy_atlas_mapping(source_tsv_path_str, output_dir_str):
         # No specific file path to return as multiple files are handled
         return None
 
-    except Exception as e:
+    except (OSError, shutil.Error) as e:
         LOGGER.error(f'Could not copy atlas mapping files to {output_dir}: {e}')
         return None
 
@@ -946,7 +945,6 @@ def _copy_atlas_mapping(source_tsv_path_str, output_dir_str):
 # --- Helper function for copying --- #
 def _copy_single_file(in_file, out_file):
     """Copies a single file using shutil.copy2, creating destination directory."""
-    import shutil
     from pathlib import Path
     out_path = Path(out_file)
     # Ensure parent directory exists
@@ -1006,15 +1004,9 @@ def _create_volumes_json_file(
     """
 
     # Imports required within the Nipype Function execution scope
-    import json
-    import os
     import re
-    import subprocess  # noqa: F401
     from collections import OrderedDict
     from pathlib import Path
-
-    import pandas as pd  # noqa: F401
-    import torch  # noqa: F401
 
     from ncdlmuse import __version__ as bids_ncdlmuse_version
     from ncdlmuse import config
@@ -1052,7 +1044,7 @@ def _create_volumes_json_file(
     except KeyError as e:
         LOGGER.error(f'Missing expected column ({e}) in ROI list file: {roi_list_tsv}. '
                     f'Cannot map volume names.')
-    except Exception as e:
+    except (OSError, json.JSONDecodeError, ValueError) as e:
         LOGGER.error(f'Error reading or processing ROI list file {roi_list_tsv}: {e!r}')
 
 
@@ -1066,9 +1058,7 @@ def _create_volumes_json_file(
         except FileNotFoundError:
             # This is expected if the sidecar doesn't exist
             LOGGER.warning(f'Source T1w JSON sidecar not found at: {source_t1w_json_path}')
-        except json.JSONDecodeError as e:
-            LOGGER.error(f'Error decoding JSON from {source_t1w_json_path}: {e}')
-        except Exception as e:
+        except (OSError, json.JSONDecodeError) as e:
             LOGGER.error(f'Error reading source T1w JSON {source_t1w_json_path}: {e}')
     else:
         LOGGER.warning('No source T1w JSON sidecar path provided.')
@@ -1111,13 +1101,10 @@ def _create_volumes_json_file(
     except FileNotFoundError:
         LOGGER.error(f'Volumes input file not found: {volumes_csv}')
         raise # Reraise to ensure node failure
-    except pd.errors.EmptyDataError:
-        LOGGER.error(f'Pandas EmptyDataError: Volumes input file is empty: {volumes_csv}')
-        raise # Reraise to ensure node failure
-    except Exception as e:
+    except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
         LOGGER.error(
             f'Error reading or processing volumes TSV/CSV {volumes_csv}: {e!r}'
-        )  # Use !r for detailed repr
+        )
         raise # Reraise to ensure node failure
 
     # 3. provenance: Gather system/version info
@@ -1125,23 +1112,28 @@ def _create_volumes_json_file(
     nichartdlmuse_version = None
     try:
         # Attempt to run NiChart_DLMUSE --version
-        # Ensure NiChart_DLMUSE is callable in the execution environment
-        result = subprocess.run(
-            ['NiChart_DLMUSE', '--version'],
-            capture_output=True,
-            text=True,
-            check=True,
-            encoding='utf-8',
-        )
-        # Assuming the version is the only output, strip whitespace
-        nichartdlmuse_version = result.stdout.strip()
-        LOGGER.info(f'Successfully obtained NiChart_DLMUSE version: {nichartdlmuse_version}')
+        # Use shutil.which to find the full path to NiChart_DLMUSE
+        nichart_dlmuse_path = shutil.which('NiChart_DLMUSE')
+        if not nichart_dlmuse_path:
+            LOGGER.warning('NiChart_DLMUSE command not found in PATH. Cannot determine version.')
+            nichartdlmuse_version = None
+        else:
+            result = subprocess.run(
+                [nichart_dlmuse_path, '--version'],
+                capture_output=True,
+                text=True,
+                check=True,
+                encoding='utf-8',
+            )
+            # Assuming the version is the only output, strip whitespace
+            nichartdlmuse_version = result.stdout.strip()
+            LOGGER.info(f'Successfully obtained NiChart_DLMUSE version: {nichartdlmuse_version}')
     except FileNotFoundError:
         LOGGER.warning('NiChart_DLMUSE command not found. Cannot determine version.')
-    except subprocess.CalledProcessError as e:
-        LOGGER.warning(f'NiChart_DLMUSE --version command failed: {e}. Output: {e.stderr}')
-    except Exception as e:
+        nichartdlmuse_version = None
+    except (OSError, subprocess.SubprocessError) as e:
         LOGGER.warning(f'An unexpected error occurred while getting NiChart_DLMUSE version: {e}')
+        nichartdlmuse_version = None
 
     torch_version = None
     cuda_version = None
@@ -1156,7 +1148,7 @@ def _create_volumes_json_file(
             LOGGER.info(f'PyTorch: {torch_version}, CUDA: Not available.')
             cuda_version = 'N/A'
             cudnn_version = 'N/A'
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         LOGGER.warning(f'Error getting Torch/CUDA/cuDNN versions: {e}')
 
     provenance = {
@@ -1186,7 +1178,7 @@ def _create_volumes_json_file(
         with open(out_file_path, 'w') as f:
             json.dump(final_json_dict, f, indent=2)
         LOGGER.info(f'Successfully wrote combined volumes JSON to {out_file_path}')
-    except Exception as e:
+    except (OSError, json.JSONDecodeError) as e:
         LOGGER.error(f'Error writing final JSON to {out_file_path}: {e}')
         raise  # Re-raise exception if writing fails
 
@@ -1296,7 +1288,6 @@ def _save_file_directly(in_file, out_dir, filename):
     """Save a file directly to the specified directory with the given filename.
     This bypasses the DerivativesDataSink's directory creation and path manipulation.
     """
-    import os
     import shutil
     from pathlib import Path
 

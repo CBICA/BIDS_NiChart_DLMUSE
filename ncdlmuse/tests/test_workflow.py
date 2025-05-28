@@ -1,12 +1,10 @@
 """Tests for ncdlmuse workflow construction."""
 
-from pathlib import Path
 
 import pytest
 from nipype.pipeline.engine import Workflow
 
 from ncdlmuse import config
-from ncdlmuse.utils.bids import get_entities_from_file  # Need this helper
 
 # Assuming conftest.py provides bids_skeleton_factory, work_dir, out_dir fixtures
 from ncdlmuse.workflows.base import init_ncdlmuse_wf, init_single_subject_wf
@@ -101,4 +99,4 @@ def test_init_ncdlmuse_wf_param_passing(bids_skeleton_single, # Use the simple f
         # TODO: Add introspection checks as before if needed
 
     finally:
-        config.execution.layout = None 
+        config.execution.layout = None

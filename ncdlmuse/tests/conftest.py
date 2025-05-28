@@ -1,7 +1,6 @@
-'''Fixtures for ncdlmuse tests.'''
+"""Fixtures for ncdlmuse tests."""
 
 import json
-from pathlib import Path
 
 import nibabel as nib
 import numpy as np
@@ -61,7 +60,7 @@ def _generate_bids_skeleton(base_path, subject_id='01', session_id=None):
 @pytest.fixture(scope='function')
 def bids_skeleton_factory(tmp_path):
     """Provides a factory function to generate BIDS skeletons."""
-    def _factory(subject_id="01", session_id=None):
+    def _factory(subject_id='01', session_id=None):
         return _generate_bids_skeleton(tmp_path, subject_id, session_id)
     return _factory
 

@@ -1,6 +1,5 @@
-'''Command-line interface tests using synthetic data.'''
+"""Command-line interface tests using synthetic data."""
 
-from pathlib import Path
 
 import pytest
 from nipype import config as nipype_config
@@ -64,7 +63,7 @@ def _build_and_fail(parameters, error_type=RuntimeError, error_match='.*'):
                 # Unexpected SystemExit during parsing
                 pytest.fail(f'Parser exited unexpectedly: {e}')
         # If build_workflow completes without the expected error
-        pytest.fail(f'Workflow build did not fail with {error_type} matching \'{error_match}\'')
+        pytest.fail(f"Workflow build did not fail with {error_type} matching '{error_match}'")
 
 
 # --- Parametrized Tests --- #

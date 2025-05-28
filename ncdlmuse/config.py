@@ -610,7 +610,7 @@ class loggers:
         cls.utils.setLevel(execution.log_level)
         ncfg.update_config(
             {'logging': {
-                'log_directory': str(execution.log_dir), 
+                'log_directory': str(execution.log_dir),
                 'log_to_file': True,
                 'log_format': cls._fmt,
                 'datefmt': '%%y%%m%%d-%%H:%%M:%%S'  # Double %% for ConfigParser
