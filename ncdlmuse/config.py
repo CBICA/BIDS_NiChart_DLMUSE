@@ -473,7 +473,7 @@ class execution(_Config):
             try:
                 default_db_in_workdir = Path(cls.work_dir) / cls.run_uuid / 'bids_db'
             except TypeError:
-                pass # default_db_in_workdir remains None
+                pass  # default_db_in_workdir remains None
 
         if cls.bids_database_dir:
             cls._db_path = Path(cls.bids_database_dir)
@@ -483,8 +483,9 @@ class execution(_Config):
             try:
                 cls._db_path.mkdir(exist_ok=True, parents=True)
             except OSError as e:
-                print(f'WARNING: Could not create BIDS DB dir {cls._db_path}: '
-                      f'{e}', file=sys.stderr)
+                print(
+                    f'WARNING: Could not create BIDS DB dir {cls._db_path}: {e}', file=sys.stderr
+                )
                 # Proceeding with cls._db_path as None if creation fails might be an option
                 # or let BIDSLayout handle it if the path is then unusable.
                 # For now, let's assume BIDSLayout will manage if path is None.
@@ -503,11 +504,11 @@ class execution(_Config):
             )
             cls._layout = BIDSLayout(
                 str(cls.bids_dir),
-                database_path=cls._db_path, # cls._db_path is now robustly defined or None
+                database_path=cls._db_path,  # cls._db_path is now robustly defined or None
                 # Reset database if we are using an in-memory DB (cls._db_path is None)
                 # OR if using a default path (bids_database_dir is None and _db_path is not None)
-                reset_database=(cls._db_path is None) or \
-                               (cls.bids_database_dir is None and cls._db_path is not None),
+                reset_database=(cls._db_path is None)
+                or (cls.bids_database_dir is None and cls._db_path is not None),
                 indexer=indexer,
             )
             cls.bids_description_hash = cls._layout.description.__hash__()
@@ -593,13 +594,18 @@ class loggers:
             _handler_cli.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
             cls.cli.addHandler(_handler_cli)
 
+        # Prevent CLI logger from propagating to root to avoid duplicate messages
+        cls.cli.propagate = False
+
         # Ensure root logger (cls.default) has a console handler if none exist
         # This is crucial for group mode where _setup_logging might be skipped.
         if not cls.default.hasHandlers():
             _handler_root_console = logging.StreamHandler(stream=sys.stdout)
-            _handler_root_console.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+            _handler_root_console.setFormatter(
+                logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt)
+            )
             # Set handler level to the general execution log level
-            # The root logger's level will also be set below, this ensures the handler passes messages.
+            # The root logger's level will also be set below, this ensures handler passes messages.
             _handler_root_console.setLevel(execution.log_level)
             cls.default.addHandler(_handler_root_console)
 
@@ -608,13 +614,29 @@ class loggers:
         cls.interface.setLevel(execution.log_level)
         cls.workflow.setLevel(execution.log_level)
         cls.utils.setLevel(execution.log_level)
+
+        # Prevent nipype loggers from propagating to root to avoid duplicate messages
+        cls.workflow.propagate = False
+        cls.interface.propagate = False
+        cls.utils.propagate = False
+
+        # Add handlers to nipype loggers since they don't propagate to root anymore
+        for nipype_logger in [cls.workflow, cls.interface, cls.utils]:
+            if not nipype_logger.hasHandlers():
+                _handler_nipype = logging.StreamHandler(stream=sys.stdout)
+                _handler_nipype.setFormatter(logging.Formatter(fmt=cls._fmt, datefmt=cls._datefmt))
+                _handler_nipype.setLevel(execution.log_level)
+                nipype_logger.addHandler(_handler_nipype)
+
         ncfg.update_config(
-            {'logging': {
-                'log_directory': str(execution.log_dir), 
-                'log_to_file': True,
-                'log_format': cls._fmt,
-                'datefmt': '%%y%%m%%d-%%H:%%M:%%S'  # Double %% for ConfigParser
-            }}
+            {
+                'logging': {
+                    'log_directory': str(execution.log_dir),
+                    'log_to_file': True,
+                    'log_format': cls._fmt,
+                    'datefmt': '%%y%%m%%d-%%H:%%M:%%S',  # Double %% for ConfigParser
+                }
+            }
         )
 
 

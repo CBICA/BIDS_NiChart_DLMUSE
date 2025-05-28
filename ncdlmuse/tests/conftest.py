@@ -1,7 +1,6 @@
-'''Fixtures for ncdlmuse tests.'''
+"""Fixtures for ncdlmuse tests."""
 
 import json
-from pathlib import Path
 
 import nibabel as nib
 import numpy as np
@@ -14,6 +13,7 @@ import pytest
 # @pytest.fixture(scope='session') def output_dir(request): ...
 # --- End CLI option fixtures ---
 
+
 def _generate_bids_skeleton(base_path, subject_id='01', session_id=None):
     """Helper function to create a BIDS skeleton."""
     bids_dir = base_path / 'bids_root'
@@ -21,7 +21,7 @@ def _generate_bids_skeleton(base_path, subject_id='01', session_id=None):
     if session_id:
         sub_anat_dir = sub_anat_dir / f'ses-{session_id}'
     sub_anat_dir = sub_anat_dir / 'anat'
-    sub_anat_dir.mkdir(parents=True, exist_ok=True) # Use exist_ok
+    sub_anat_dir.mkdir(parents=True, exist_ok=True)  # Use exist_ok
 
     # Create synthetic T1w data
     t1w_data = np.zeros((10, 10, 10), dtype=np.float32)
@@ -43,7 +43,7 @@ def _generate_bids_skeleton(base_path, subject_id='01', session_id=None):
             'Name': 'NCDLMUSE Test Skeleton',
             'BIDSVersion': '1.10.0',
             'DatasetType': 'raw',
-            'Authors': ['pytest']
+            'Authors': ['pytest'],
         }
         with open(desc_filename, 'w') as f:
             json.dump(dataset_desc, f, indent=2)
@@ -56,31 +56,37 @@ def _generate_bids_skeleton(base_path, subject_id='01', session_id=None):
         # Simple age placeholder, could be parametrized too
         f.write(f'sub-{subject_id}\t25\n')
 
-    return bids_dir, t1w_filename # Return both root and the image path
+    return bids_dir, t1w_filename  # Return both root and the image path
 
-@pytest.fixture(scope='function')
+
+@pytest.fixture
 def bids_skeleton_factory(tmp_path):
     """Provides a factory function to generate BIDS skeletons."""
-    def _factory(subject_id="01", session_id=None):
+
+    def _factory(subject_id='01', session_id=None):
         return _generate_bids_skeleton(tmp_path, subject_id, session_id)
+
     return _factory
 
-@pytest.fixture(scope='function')
+
+@pytest.fixture
 def bids_skeleton_single(bids_skeleton_factory):
     """Provides a default single-subject, single-session BIDS skeleton."""
     bids_dir, _ = bids_skeleton_factory(subject_id='01')
-    return bids_dir # Keep original fixture name for compatibility if needed
+    return bids_dir  # Keep original fixture name for compatibility if needed
 
-@pytest.fixture(scope='function')
+
+@pytest.fixture
 def work_dir(tmp_path):
     """Provides a temporary working directory path."""
     work_path = tmp_path / 'work'
-    work_path.mkdir(exist_ok=True) # Use exist_ok
-    return work_path # Return Path object
+    work_path.mkdir(exist_ok=True)  # Use exist_ok
+    return work_path  # Return Path object
 
-@pytest.fixture(scope='function')
+
+@pytest.fixture
 def out_dir(tmp_path):
     """Provides a temporary output directory path."""
     out_path = tmp_path / 'out'
-    out_path.mkdir(exist_ok=True) # Use exist_ok
-    return out_path # Return Path object
+    out_path.mkdir(exist_ok=True)  # Use exist_ok
+    return out_path  # Return Path object

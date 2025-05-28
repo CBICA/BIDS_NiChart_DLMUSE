@@ -74,4 +74,3 @@ def _select_last_in_list(lst):
 def _prefix(subid):
     """Add sub- prefix to subject ID, if necessary."""
     return subid if subid.startswith('sub-') else f'sub-{subid}'
-

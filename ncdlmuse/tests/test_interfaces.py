@@ -9,7 +9,7 @@ import pytest
 from ncdlmuse.interfaces.ncdlmuse import NiChartDLMUSE
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def synthetic_t1w_file(tmp_path):
     """Creates just the synthetic T1w file."""
     t1w_data = np.zeros((10, 10, 10), dtype=np.float32)
@@ -19,6 +19,7 @@ def synthetic_t1w_file(tmp_path):
     t1w_filename = tmp_path / 'synth_T1w.nii.gz'
     t1w_img.to_filename(t1w_filename)
     return str(t1w_filename)
+
 
 @pytest.mark.parametrize(
     ('inputs', 'expected_args'),
@@ -36,30 +37,29 @@ def synthetic_t1w_file(tmp_path):
         # Model folder
         ({'model_folder': '/path/models'}, ['-d', 'cpu', '--model_folder', '/path/models']),
         # All options together
-        ({'device': 'cuda', 'disable_tta': True, 'clear_cache': True, 'all_in_gpu': True},
-         ['-d', 'cuda', '--all_in_gpu', '--disable_tta', '--clear_cache']),
-    ]
+        (
+            {'device': 'cuda', 'disable_tta': True, 'clear_cache': True, 'all_in_gpu': True},
+            ['-d', 'cuda', '--all_in_gpu', '--disable_tta', '--clear_cache'],
+        ),
+    ],
 )
 def test_nichartdlmuse_cmdline(synthetic_t1w_file, inputs, expected_args):
     """Check that the interface generates the correct command line arguments."""
-    iface = NiChartDLMUSE(
-        input_image=synthetic_t1w_file,
-        **inputs
-    )
+    iface = NiChartDLMUSE(input_image=synthetic_t1w_file, **inputs)
 
     # The cmdline attribute holds the command string
     cmd = iface.cmdline
 
     # Basic checks
     assert cmd.startswith('NiChart_DLMUSE')
-    assert f'-i {Path(synthetic_t1w_file).parent}' in cmd # Checks input dir based on file
-    assert '-o ' in cmd # Check that output dir flag exists
+    assert f'-i {Path(synthetic_t1w_file).parent}' in cmd  # Checks input dir based on file
+    assert '-o ' in cmd  # Check that output dir flag exists
 
     # Check for expected optional args (order might vary slightly)
     for arg in expected_args:
-        if ' ' in arg: # Handle args with values like '--model_folder /path'
+        if ' ' in arg:  # Handle args with values like '--model_folder /path'
             assert arg in cmd
-        else: # Handle flags like '--disable_tta'
+        else:  # Handle flags like '--disable_tta'
             assert f' {arg}' in cmd
 
     # Check that args not provided are NOT in the cmdline (example)
@@ -73,7 +73,8 @@ def test_nichartdlmuse_cmdline(synthetic_t1w_file, inputs, expected_args):
 #    (models, specific GPU libraries if testing cuda) are available.
 # This is often handled in integration tests rather than pure unit tests.
 
+
 def test_nichartdlmuse_missing_input():
     """Test that the interface raises an error if input_image is missing."""
-    with pytest.raises( ValueError,match="NiChartDLMUSE requires a value for input 'input_image'"):
+    with pytest.raises(ValueError, match="NiChartDLMUSE requires a value for input 'input_image'"):
         NiChartDLMUSE().run()

@@ -31,22 +31,22 @@ def aggregate_volumes(derivatives_dir, output_file):
             return
 
         all_data_rows = []
-        all_volume_keys = set() # Keep track of all unique volume keys
+        all_volume_keys = set()  # Keep track of all unique volume keys
 
         for json_path in json_files:
             try:
                 entities = layout.parse_file_entities(json_path)
-                subject_id = f"sub-{entities['subject']}"
-                session_id = f"ses-{entities['session']}" if 'session' in entities else None
+                subject_id = f'sub-{entities["subject"]}'
+                session_id = f'ses-{entities["session"]}' if 'session' in entities else None
 
                 with open(json_path) as f:
                     data = json.load(f)
 
                 if 'volumes' not in data or not isinstance(data['volumes'], dict):
                     print(
-                        f"WARNING: No 'volumes' dict found in {json_path}. "
-                        f"Skipping.", file=sys.stderr
-                        )
+                        f"WARNING: No 'volumes' dict found in {json_path}. Skipping.",
+                        file=sys.stderr,
+                    )
                     continue
 
                 # Prepare row data
@@ -60,11 +60,11 @@ def aggregate_volumes(derivatives_dir, output_file):
                 all_volume_keys.update(data['volumes'].keys())
 
             except FileNotFoundError:
-                 print(f'ERROR: File not found during aggregation: {json_path}', file=sys.stderr)
+                print(f'ERROR: File not found during aggregation: {json_path}', file=sys.stderr)
             except json.JSONDecodeError:
-                 print(f'WARNING: Could not decode JSON: {json_path}', file=sys.stderr)
+                print(f'WARNING: Could not decode JSON: {json_path}', file=sys.stderr)
             except (KeyError, TypeError, ValueError, OSError) as e:
-                 print(f'WARNING: Error processing {json_path}: {e!r}', file=sys.stderr)
+                print(f'WARNING: Error processing {json_path}: {e!r}', file=sys.stderr)
 
         if not all_data_rows:
             # LOGGER.warning('No valid volume data collected.')

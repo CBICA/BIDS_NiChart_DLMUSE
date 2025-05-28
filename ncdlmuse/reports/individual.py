@@ -363,32 +363,20 @@ class SafeReport(NireportsReport):
         sections = []
 
         # Add Summary section
-        summary_section = {
-            'id': 'summary',
-            'name': 'Summary',
-            'reportlets': []
-        }
+        summary_section = {'id': 'summary', 'name': 'Summary', 'reportlets': []}
 
         # Add Anatomical section
         anatomical_section = {
             'id': 'anatomical',
             'name': 'Anatomical Processing',
-            'reportlets': []
+            'reportlets': [],
         }
 
         # Add Processing Details section
-        processing_section = {
-            'id': 'processing',
-            'name': 'Processing Details',
-            'reportlets': []
-        }
+        processing_section = {'id': 'processing', 'name': 'Processing Details', 'reportlets': []}
 
         # Add About section
-        about_section = {
-            'id': 'about',
-            'name': 'About',
-            'reportlets': []
-        }
+        about_section = {'id': 'about', 'name': 'About', 'reportlets': []}
 
         # Process each reportlet and add to appropriate section
         for reportlet in self.reportlets:
@@ -399,31 +387,36 @@ class SafeReport(NireportsReport):
                 if 'sub-' in reportlet_path.name:
                     svg_subject_id = reportlet_path.name.split('_')[0].replace('sub-', '')
 
-                content = \
-                    (f'<img src="sub-{svg_subject_id}/figures/{reportlet_path.name}" '
-                     f'alt="{reportlet_path.stem}" '
-                     f'class="img-fluid">')
+                content = (
+                    f'<img src="sub-{svg_subject_id}/figures/{reportlet_path.name}" '
+                    f'alt="{reportlet_path.stem}" '
+                    f'class="img-fluid">'
+                )
 
                 # Determine which section based on filename
-                if ('brain' in reportlet_path.name.lower() or
-                    'mask' in reportlet_path.name.lower()):
-                    anatomical_section['reportlets'].append({
-                        'title': 'DLICV Brain Mask',
-                        'description': 'DLICV Brain mask overlaid on the T1w image.',
-                        'content': content
-                    })
-                elif ('segmentation' in reportlet_path.name.lower() or
-                      'dlmuse' in reportlet_path.name.lower()):
-                    anatomical_section['reportlets'].append({
-                        'title': 'DLMUSE Segmentation',
-                        'description': 'DLMUSE segmentation overlaid on the T1w image.',
-                        'content': content
-                    })
+                if 'brain' in reportlet_path.name.lower() or 'mask' in reportlet_path.name.lower():
+                    anatomical_section['reportlets'].append(
+                        {
+                            'title': 'DLICV Brain Mask',
+                            'description': 'DLICV Brain mask overlaid on the T1w image.',
+                            'content': content,
+                        }
+                    )
+                elif (
+                    'segmentation' in reportlet_path.name.lower()
+                    or 'dlmuse' in reportlet_path.name.lower()
+                ):
+                    anatomical_section['reportlets'].append(
+                        {
+                            'title': 'DLMUSE Segmentation',
+                            'description': 'DLMUSE segmentation overlaid on the T1w image.',
+                            'content': content,
+                        }
+                    )
                 else:
-                    anatomical_section['reportlets'].append({
-                        'title': reportlet_path.stem,
-                        'content': content
-                    })
+                    anatomical_section['reportlets'].append(
+                        {'title': reportlet_path.stem, 'content': content}
+                    )
 
             elif reportlet_path.suffix.lower() == '.html':
                 try:
@@ -431,28 +424,21 @@ class SafeReport(NireportsReport):
 
                     # Determine section based on filename
                     if 'summary' in reportlet_path.name.lower():
-                        summary_section['reportlets'].append({
-                            'title': 'Processing Summary',
-                            'content': content
-                        })
+                        summary_section['reportlets'].append(
+                            {'title': 'Processing Summary', 'content': content}
+                        )
                     elif 'workflowprovenance' in reportlet_path.name.lower():
-                        processing_section['reportlets'].append({
-                            'content': content
-                        })
+                        processing_section['reportlets'].append({'content': content})
                     elif 'processingerrors' in reportlet_path.name.lower():
-                        processing_section['reportlets'].append({
-                            'content': content
-                        })
+                        processing_section['reportlets'].append({'content': content})
                     elif 'about' in reportlet_path.name.lower():
-                        about_section['reportlets'].append({
-                            'title': 'About this Run',
-                            'content': content
-                        })
+                        about_section['reportlets'].append(
+                            {'title': 'About this Run', 'content': content}
+                        )
                     else:
-                        processing_section['reportlets'].append({
-                            'title': reportlet_path.stem,
-                            'content': content
-                        })
+                        processing_section['reportlets'].append(
+                            {'title': reportlet_path.stem, 'content': content}
+                        )
                 except (OSError, UnicodeDecodeError) as e:
                     config.loggers.cli.warning(
                         f'Error reading HTML reportlet {reportlet_path}: {e}'
@@ -472,13 +458,14 @@ class SafeReport(NireportsReport):
         try:
             template = jinja2.Template(template_str)
             # Format subject_id with sub- prefix if it's not already there
-            formatted_subject_id = \
+            formatted_subject_id = (
                 f'sub-{subject_id}' if not subject_id.startswith('sub-') else subject_id
+            )
             html_content = template.render(
                 subject_id=formatted_subject_id,
                 sections=sections,
                 version=version,
-                timestamp=timestamp
+                timestamp=timestamp,
             )
 
             # Write the HTML file
@@ -488,9 +475,7 @@ class SafeReport(NireportsReport):
 
             return str(output_file)
         except (OSError, jinja2.TemplateError, UnicodeEncodeError) as e:
-            config.loggers.cli.error(
-                f'Error generating HTML report: {e}'
-            )
+            config.loggers.cli.error(f'Error generating HTML report: {e}')
             return None
 
 
@@ -533,8 +518,7 @@ def generate_reports(
             new_layout_derivatives = {}
             if isinstance(original_derivatives, dict):
                 new_layout_derivatives = {
-                    k: str(v.path) for k, v in original_derivatives.items()
-                    if hasattr(v, 'path')
+                    k: str(v.path) for k, v in original_derivatives.items() if hasattr(v, 'path')
                 }
             elif isinstance(original_derivatives, list):
                 new_layout_derivatives = [str(p) for p in original_derivatives]
@@ -546,24 +530,26 @@ def generate_reports(
             # Add subject figures directory to derivatives if it exists
             for subject_label_with_prefix in subject_list:
                 subject_id = subject_label_with_prefix.lstrip('sub-')
-                subject_figures_dir = (
-                    Path(output_dir).absolute() / f'sub-{subject_id}' / 'figures'
-                )
+                subject_figures_dir = Path(output_dir).absolute() / f'sub-{subject_id}' / 'figures'
                 if subject_figures_dir.exists():
                     if isinstance(new_layout_derivatives, dict):
-                        new_layout_derivatives[f'sub-{subject_id}'] = \
-                            str(subject_figures_dir.parent)
+                        new_layout_derivatives[f'sub-{subject_id}'] = str(
+                            subject_figures_dir.parent
+                        )
                     elif isinstance(new_layout_derivatives, list):
                         new_layout_derivatives.append(str(subject_figures_dir.parent))
                     else:
-                        new_layout_derivatives = \
-                            [new_layout_derivatives, str(subject_figures_dir.parent)]
+                        new_layout_derivatives = [
+                            new_layout_derivatives,
+                            str(subject_figures_dir.parent),
+                        ]
 
             # If new_layout_derivatives is empty or still a string referring to out_dir
             is_empty_or_self_ref = (
-                (isinstance(new_layout_derivatives, dict) and not new_layout_derivatives) or
-                (isinstance(new_layout_derivatives, str) and
-                 str(Path(output_dir).absolute()) in new_layout_derivatives)
+                isinstance(new_layout_derivatives, dict) and not new_layout_derivatives
+            ) or (
+                isinstance(new_layout_derivatives, str)
+                and str(Path(output_dir).absolute()) in new_layout_derivatives
             )
 
             if is_empty_or_self_ref:
@@ -588,7 +574,7 @@ def generate_reports(
                 derivatives=new_layout_derivatives,
                 invalid_filters='allow',
                 validate=False,
-                indexer=BIDSLayoutIndexer(validate=False, index_metadata=False)
+                indexer=BIDSLayoutIndexer(validate=False, index_metadata=False),
             )
         except (OSError, ValueError, RuntimeError) as e:
             config.loggers.cli.error(f'Failed to re-create BIDSLayout: {e}')
@@ -675,9 +661,7 @@ def generate_reports(
             if active_session_list is None:
                 all_filters = config.execution.bids_filters or {}
                 filters = all_filters.get('t1w', {})
-                active_session_list = layout.get_sessions(
-                    subject=subject_id_for_report, **filters
-                )
+                active_session_list = layout.get_sessions(subject=subject_id_for_report, **filters)
             active_session_list = [
                 ses[4:] if ses.startswith('ses-') else ses for ses in active_session_list
             ]
@@ -687,8 +671,9 @@ def generate_reports(
                 if session_bootstrap_file is None:
                     session_bootstrap_file = data.load('reports-spec.yml')
 
-                session_html_report_filename = \
+                session_html_report_filename = (
                     f'sub-{subject_id_for_report}_ses-{session_label}.html'
+                )
                 try:
                     final_session_html_path = output_dir_path / session_html_report_filename
                     config.loggers.cli.info(
@@ -720,8 +705,6 @@ def generate_reports(
                     report_errors.append(f'{subject_label_with_prefix}_ses-{session_label}')
 
     if report_errors:
-        config.loggers.cli.error(
-            f'Report generation failed for: {", ".join(report_errors)}'
-        )
+        config.loggers.cli.error(f'Report generation failed for: {", ".join(report_errors)}')
         return 1
     return 0

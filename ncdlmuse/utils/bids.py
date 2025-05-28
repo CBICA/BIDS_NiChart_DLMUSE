@@ -7,14 +7,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-
-# utils/bids.py
-# """BIDS utilities for NCDLMUSE."""
 import re
-import shutil
 from pathlib import Path
-
-from ncdlmuse import data as ncdlmuse_data_module
 
 LOGGER = logging.getLogger('ncdlmuse.utils.bids')
 
@@ -54,7 +48,7 @@ def get_entities_from_file(file_path, layout=None):
             entities.setdefault('datatype', 'anat')  # Assume anat if missing
             entities.setdefault('suffix', Path(file_path).name.split('_')[-1].split('.')[0])
             return entities
-        except Exception as e:  # Catch potential layout errors
+        except (ValueError, IndexError, AttributeError, KeyError) as e:
             LOGGER.warning(
                 f'Could not parse BIDS entities for {file_path} using provided layout: {e}'
             )
