@@ -38,6 +38,7 @@ from .. import data
 warnings.filterwarnings('ignore', message='.*already loaded.*packaging.*')
 warnings.filterwarnings('ignore', message='.*is non-raw schema type.*')
 
+
 def main():
     """Entry point for ncdlmuse BIDS App.
 
@@ -268,6 +269,7 @@ def main():
     try:
         # Use shutil.which to find the full path to the executable
         from shutil import which
+
         dlmuse_path = which('NiChart_DLMUSE')
         if not dlmuse_path:
             raise FileNotFoundError('NiChart_DLMUSE executable not found in PATH')

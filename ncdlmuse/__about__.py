@@ -9,8 +9,7 @@ except ImportError:
 
 __packagename__ = 'BIDS_NiChart_DLMUSE'
 __copyright__ = 'Copyright 2025, The NCDLMUSE Developers'
-__credits__ = (
-)
+__credits__ = ()
 __url__ = 'https://github.com/CBICA/BIDS_NiChart_DLMUSE'
 
 DOWNLOAD_URL = f'https://github.com/CBICA/{__packagename__}/archive/{__version__}.tar.gz'

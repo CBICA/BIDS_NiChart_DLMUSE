@@ -38,9 +38,8 @@ from ..utils.bids import get_entities_from_file
 
 LOGGER = config.loggers.workflow
 
-def init_ncdlmuse_wf(
-    name='ncdlmuse_wf'
-):
+
+def init_ncdlmuse_wf(name='ncdlmuse_wf'):
     """Initialize the top-level NCDLMUSE workflow.
 
     Handles BIDS discovery based on config settings, iterates over subjects/sessions,
@@ -74,9 +73,9 @@ def init_ncdlmuse_wf(
     # --- Retrieve parameters from config --- #
     output_dir = config.execution.output_dir
     work_dir = config.execution.work_dir
-    layout = config.execution.layout # Get BIDS layout
-    subject_list = config.execution.participant_label # List of subjects to process
-    session_list = config.execution.session_label # Optional list of sessions
+    layout = config.execution.layout  # Get BIDS layout
+    subject_list = config.execution.participant_label  # List of subjects to process
+    session_list = config.execution.session_label  # Optional list of sessions
     device = config.workflow.dlmuse_device
     nthreads = config.nipype.n_procs
     model_folder = config.workflow.dlmuse_model_folder
@@ -142,8 +141,8 @@ and manages overall execution settings.
         raise
 
     # --- Copy atlas mapping once if it doesn't exist --- #
-    target_tsv_path = Path(output_dir) / 'seg-DLMUSE_dseg.tsv' # Uses output_dir, OK
-    target_json_path = Path(output_dir) / 'seg-DLMUSE_dseg.json' # Uses output_dir, OK
+    target_tsv_path = Path(output_dir) / 'seg-DLMUSE_dseg.tsv'  # Uses output_dir, OK
+    target_json_path = Path(output_dir) / 'seg-DLMUSE_dseg.json'  # Uses output_dir, OK
 
     # Call the copy function if either file is missing
     if not target_tsv_path.exists() or not target_json_path.exists():
@@ -155,7 +154,7 @@ and manages overall execution settings.
     else:
         LOGGER.info(
             f'Target atlas mappings TSV and JSON already exist in {output_dir}. Skipping copy.'
-            )
+        )
 
     # --- Iterate over subjects and sessions, query T1w files --- #
     processed_file_count = 0
@@ -164,7 +163,7 @@ and manages overall execution settings.
             'subject': subject_id,
             'suffix': 'T1w',
             'extension': ['.nii', '.nii.gz'],
-            'return_type': 'file'
+            'return_type': 'file',
         }
 
         sessions_to_query = session_list if session_list else [None]
@@ -184,6 +183,7 @@ and manages overall execution settings.
                 t1w_files = layout.get(**query_params)
             except (OSError, shutil.Error) as e:
                 import traceback
+
                 LOGGER.error(f'Error querying BIDS layout for {subj_sess_prefix}: {e}')
                 print('--- Full Traceback --- ')
                 traceback.print_exc()
@@ -217,7 +217,7 @@ and manages overall execution settings.
                 elif p.suffix == '.nii':
                     base = p.with_suffix('')
                 else:
-                    base = p.with_suffix('') # Fallback for unexpected extensions
+                    base = p.with_suffix('')  # Fallback for unexpected extensions
                 sidecar = base.with_suffix('.json')
                 t1w_json = str(sidecar) if sidecar.exists() else None
                 if not t1w_json:
@@ -227,9 +227,9 @@ and manages overall execution settings.
                 # This will be passed to init_single_subject_wf
                 # The reportlets_dir should be in the derivatives directory
                 reportlets_dir = (
-                    Path(ncdlmuse_output_dir) /
-                    f"sub-{entities.get('subject', 'UNKNOWN')}" /
-                    'figures'
+                    Path(ncdlmuse_output_dir)
+                    / f'sub-{entities.get("subject", "UNKNOWN")}'
+                    / 'figures'
                 )
                 reportlets_dir.mkdir(parents=True, exist_ok=True)
 
@@ -390,7 +390,7 @@ def init_single_subject_wf(
     workflow : :py:class:`niworkflows.engine.workflows.LiterateWorkflow`
         The assembled Nipype workflow object for a single subject.
     """
-    workflow = Workflow(name=name) # Use LiterateWorkflow
+    workflow = Workflow(name=name)  # Use LiterateWorkflow
     if work_dir:
         workflow.base_dir = str(work_dir)
 
@@ -446,11 +446,9 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     bidssrc = pe.Node(
         BIDSDataGrabber(
-            subject_data=subject_data_for_grabber,
-            subject_id=subject_id,
-            anat_only=True
+            subject_data=subject_data_for_grabber, subject_id=subject_id, anat_only=True
         ),
-        name='bidssrc'
+        name='bidssrc',
     )
 
     # --- Define InputNode (for static/global files not handled by BIDSDataGrabber) ---
@@ -475,7 +473,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
                 'dlmuse_segmentation',  # NIfTI segmented T1w
                 'dlicv_mask',  # NIfTI brain mask
                 'brain_mask_meta',  # Dict for mask JSON
-                'volumes_json_path', # Path to the generated JSON
+                'volumes_json_path',  # Path to the generated JSON
                 # Keep fields if needed for QC or other purposes
             ]
         ),
@@ -549,12 +547,18 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # --- Connect Workflow --- #
     # Connect BIDSDataGrabber outputs and InputNode to processing nodes
-    workflow.connect([
-        (bidssrc, dlmuse_node, [(('t1w', _select_first_from_list), 'input_image')]),
-        (bidssrc, create_meta_node, [(('t1w', _select_first_from_list), 'raw_source_file')]),
-        (bidssrc, create_seg_meta_node, [(('t1w', _select_first_from_list), 'raw_source_file')]),
-        (inputnode, create_volumes_json_node, [('roi_list_tsv', 'roi_list_tsv')]),
-    ])
+    workflow.connect(
+        [
+            (bidssrc, dlmuse_node, [(('t1w', _select_first_from_list), 'input_image')]),
+            (bidssrc, create_meta_node, [(('t1w', _select_first_from_list), 'raw_source_file')]),
+            (
+                bidssrc,
+                create_seg_meta_node,
+                [(('t1w', _select_first_from_list), 'raw_source_file')],
+            ),
+            (inputnode, create_volumes_json_node, [('roi_list_tsv', 'roi_list_tsv')]),
+        ]
+    )
 
     # Connect internal processing nodes
     workflow.connect(dlmuse_node, 'dlmuse_volumes', create_volumes_json_node, 'volumes_csv')
@@ -563,10 +567,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
     workflow.connect(dlmuse_node, 'dlmuse_segmentation', outputnode, 'dlmuse_segmentation')
     workflow.connect(dlmuse_node, 'dlicv_mask', outputnode, 'dlicv_mask')
     workflow.connect(create_meta_node, 'meta_dict', outputnode, 'brain_mask_meta')
-    workflow.connect(
-        create_volumes_json_node, 'output_json_path',
-        outputnode, 'volumes_json_path'
-        )
+    workflow.connect(create_volumes_json_node, 'output_json_path', outputnode, 'volumes_json_path')
 
     # --- Add DataSink Nodes --- #
 
@@ -618,21 +619,27 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         niu.Function(
             input_names=['in_file', 'out_file'],
             output_names=['copied_file'],
-            function=_copy_single_file
+            function=_copy_single_file,
         ),
-        name='copy_volumes_json'
+        name='copy_volumes_json',
     )
 
     # --- Connect Processing Nodes to DataSinks --- #
 
     # Connect Inputs required by all datasinks
     # Source file for datasinks comes from BIDSDataGrabber
-    workflow.connect([
-        (bidssrc, ds_seg_nii, [(('t1w', _select_first_from_list), 'source_file')]),
-        (bidssrc, ds_brain_mask, [(('t1w', _select_first_from_list), 'source_file')]),
-        (bidssrc, ds_volumes_json_pathfinder, [(('t1w', _select_first_from_list), 'source_file')]),
-        (inputnode, ds_volumes_json_pathfinder, [('io_spec', 'io_spec')])
-    ])
+    workflow.connect(
+        [
+            (bidssrc, ds_seg_nii, [(('t1w', _select_first_from_list), 'source_file')]),
+            (bidssrc, ds_brain_mask, [(('t1w', _select_first_from_list), 'source_file')]),
+            (
+                bidssrc,
+                ds_volumes_json_pathfinder,
+                [(('t1w', _select_first_from_list), 'source_file')],
+            ),
+            (inputnode, ds_volumes_json_pathfinder, [('io_spec', 'io_spec')]),
+        ]
+    )
 
     # a) Connect DLMUSE segmentation NIfTI
     workflow.connect(dlmuse_node, 'dlmuse_segmentation', ds_seg_nii, 'in_file')
@@ -644,9 +651,8 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # d) Connect Volumes JSON generation and copying
     workflow.connect(
-        create_volumes_json_node, 'output_json_path',
-        ds_volumes_json_pathfinder, 'in_file'
-        )
+        create_volumes_json_node, 'output_json_path', ds_volumes_json_pathfinder, 'in_file'
+    )
     # Connect temp JSON path to copy node in_file
     workflow.connect(create_volumes_json_node, 'output_json_path', copy_json_node, 'in_file')
     # Connect pathfinder output path to copy node out_file
@@ -654,8 +660,7 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # --- Add Reportlet Generation Nodes --- #
     LOGGER.info(
-        f'[{subject_id_str}] Adding reportlet nodes. '
-        f'Reportlets will be saved to: {reportlets_dir}'
+        f'[{subject_id_str}] Adding reportlet nodes. Reportlets will be saved to: {reportlets_dir}'
     )
     # Ensure reportlets_dir (for SVGs) is a Path and exists
     current_reportlets_dir = Path(reportlets_dir)
@@ -670,35 +675,41 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         ROIsPlot(
             colors=['#FF0000'],  # Red contour
             levels=[0.5],
-            out_report=\
-                str(current_reportlets_dir.absolute() / f'{base_filename}_desc-brainMask_T1w.svg')
+            out_report=str(
+                current_reportlets_dir.absolute() / f'{base_filename}_desc-brainMask_T1w.svg'
+            ),
         ),
         name='plot_brain_mask',
-        mem_gb=0.2 # Slightly more memory for plotting
+        mem_gb=0.2,  # Slightly more memory for plotting
     )
 
     # Reportlet for DLMUSE Segmentation
     plot_dlmuse_seg = pe.Node(
         ROIsPlot(
-            out_report=\
-                str(current_reportlets_dir.absolute() / \
-                    f'{base_filename}_desc-dlmuseSegmentation_T1w.svg')
+            out_report=str(
+                current_reportlets_dir.absolute()
+                / f'{base_filename}_desc-dlmuseSegmentation_T1w.svg'
+            )
         ),
         name='plot_dlmuse_seg',
-        mem_gb=0.2 # Slightly more memory for plotting
+        mem_gb=0.2,  # Slightly more memory for plotting
     )
 
     # Connect T1w (background) and masks/segmentations (foreground)
     # T1w input for plots comes from BIDSDataGrabber
-    workflow.connect([
-        (bidssrc, plot_brain_mask, [(('t1w', _select_first_from_list), 'in_file')]),
-        (dlmuse_node, plot_brain_mask, [('dlicv_mask', 'in_rois')])
-    ])
+    workflow.connect(
+        [
+            (bidssrc, plot_brain_mask, [(('t1w', _select_first_from_list), 'in_file')]),
+            (dlmuse_node, plot_brain_mask, [('dlicv_mask', 'in_rois')]),
+        ]
+    )
 
-    workflow.connect([
-        (bidssrc, plot_dlmuse_seg, [(('t1w', _select_first_from_list), 'in_file')]),
-        (dlmuse_node, plot_dlmuse_seg, [('dlmuse_segmentation', 'in_rois')])
-    ])
+    workflow.connect(
+        [
+            (bidssrc, plot_dlmuse_seg, [(('t1w', _select_first_from_list), 'in_file')]),
+            (dlmuse_node, plot_dlmuse_seg, [('dlmuse_segmentation', 'in_rois')]),
+        ]
+    )
 
     # --- END Reportlet Generation ---
 
@@ -711,24 +722,27 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             session_id=_current_t1w_entities.get('session', 'N/A'),
         ),
         name='subject_summary_node',
-        run_without_submitting=True
+        run_without_submitting=True,
     )
 
     # Connect inputs to subject summary
-    workflow.connect([
-        (bidssrc, subject_summary_node, [(('t1w', _make_list), 't1w')]),
-        (dlmuse_node, subject_summary_node, [
-            ('dlicv_mask', 'brain_mask_file'),
-            ('dlmuse_segmentation', 'dlmuse_seg_file')
-        ]),
-    ])
+    workflow.connect(
+        [
+            (bidssrc, subject_summary_node, [(('t1w', _make_list), 't1w')]),
+            (
+                dlmuse_node,
+                subject_summary_node,
+                [('dlicv_mask', 'brain_mask_file'), ('dlmuse_segmentation', 'dlmuse_seg_file')],
+            ),
+        ]
+    )
 
     # Create DerivativesDataSink nodes for all HTML reports
     ds_report_summary = pe.Node(
         niu.Function(
             input_names=['in_file', 'out_dir', 'filename'],
             output_names=['out_file'],
-            function=_save_file_directly
+            function=_save_file_directly,
         ),
         name='ds_report_summary',
         run_without_submitting=True,
@@ -740,17 +754,17 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
             pipeline_name='ncdlmuse',
             version=config.environment.version,
             command=' '.join(config.execution.cmdline),
-            timestamp=time.strftime('%Y-%m-%d %H:%M:%S %Z')
+            timestamp=time.strftime('%Y-%m-%d %H:%M:%S %Z'),
         ),
         name='execution_provenance_node',
-        run_without_submitting=True
+        run_without_submitting=True,
     )
 
     ds_report_about = pe.Node(
         niu.Function(
             input_names=['in_file', 'out_dir', 'filename'],
             output_names=['out_file'],
-            function=_save_file_directly
+            function=_save_file_directly,
         ),
         name='ds_report_about',
         run_without_submitting=True,
@@ -761,22 +775,19 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
         niu.Function(
             input_names=['segmentation_file', 'volumes_csv_file'],
             output_names=['error_messages_list'],
-            function=_check_dlmuse_outputs
+            function=_check_dlmuse_outputs,
         ),
         name='check_dlmuse_outputs_node',
-        run_without_submitting=True
+        run_without_submitting=True,
     )
 
-    error_report_node = pe.Node(
-        ErrorReportlet(),
-        name='error_report_node'
-    )
+    error_report_node = pe.Node(ErrorReportlet(), name='error_report_node')
 
     ds_error_report = pe.Node(
         niu.Function(
             input_names=['in_file', 'out_dir', 'filename'],
             output_names=['out_file'],
-            function=_save_file_directly
+            function=_save_file_directly,
         ),
         name='ds_error_report',
         run_without_submitting=True,
@@ -784,15 +795,14 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # 4. Workflow Provenance Reportlet (Software versions from JSON)
     workflow_provenance_report_node = pe.Node(
-        WorkflowProvenanceReportlet(),
-        name='workflow_provenance_report_node'
+        WorkflowProvenanceReportlet(), name='workflow_provenance_report_node'
     )
 
     ds_workflow_provenance_report = pe.Node(
         niu.Function(
             input_names=['in_file', 'out_dir', 'filename'],
             output_names=['out_file'],
-            function=_save_file_directly
+            function=_save_file_directly,
         ),
         name='ds_workflow_provenance_report',
         run_without_submitting=True,
@@ -800,84 +810,104 @@ NCDLMUSE is built using Nipype {config.environment.nipype_version}
 
     # Create input nodes for the file paths
     summary_input = pe.Node(
-        niu.IdentityInterface(fields=['out_dir', 'filename']),
-        name='summary_input'
+        niu.IdentityInterface(fields=['out_dir', 'filename']), name='summary_input'
     )
     summary_input.inputs.out_dir = str(current_reportlets_dir.absolute())
     summary_input.inputs.filename = f'{base_filename}_desc-summary_T1w.html'
 
     about_input = pe.Node(
-        niu.IdentityInterface(fields=['out_dir', 'filename']),
-        name='about_input'
+        niu.IdentityInterface(fields=['out_dir', 'filename']), name='about_input'
     )
     about_input.inputs.out_dir = str(current_reportlets_dir.absolute())
     about_input.inputs.filename = f'{base_filename}_desc-about_T1w.html'
 
     errors_input = pe.Node(
-        niu.IdentityInterface(fields=['out_dir', 'filename']),
-        name='errors_input'
+        niu.IdentityInterface(fields=['out_dir', 'filename']), name='errors_input'
     )
     errors_input.inputs.out_dir = str(current_reportlets_dir.absolute())
     errors_input.inputs.filename = f'{base_filename}_desc-processingErrors_T1w.html'
 
     provenance_input = pe.Node(
-        niu.IdentityInterface(fields=['out_dir', 'filename']),
-        name='provenance_input'
+        niu.IdentityInterface(fields=['out_dir', 'filename']), name='provenance_input'
     )
     provenance_input.inputs.out_dir = str(current_reportlets_dir.absolute())
     provenance_input.inputs.filename = f'{base_filename}_desc-workflowProvenance_T1w.html'
 
     # Connect all report nodes
-    workflow.connect([
-        # Subject Summary Report
-        (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
-        (summary_input, ds_report_summary, [('out_dir', 'out_dir'), ('filename', 'filename')]),
-
-        # Execution Provenance Report
-        (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
-        (about_input, ds_report_about, [('out_dir', 'out_dir'), ('filename', 'filename')]),
-
-        # Error Report
-        (dlmuse_node, check_dlmuse_outputs_node, [
-            ('dlmuse_segmentation', 'segmentation_file'),
-            ('dlmuse_volumes', 'volumes_csv_file')
-        ]),
-        (check_dlmuse_outputs_node, error_report_node, \
-            [('error_messages_list', 'error_messages')]),
-        (error_report_node, ds_error_report, [('out_report', 'in_file')]),
-        (errors_input, ds_error_report, [('out_dir', 'out_dir'), ('filename', 'filename')]),
-
-        # Workflow Provenance Report
-        (create_volumes_json_node, workflow_provenance_report_node, \
-            [('output_json_path', 'provenance_json_file')]),
-        (workflow_provenance_report_node, ds_workflow_provenance_report, \
-            [('out_report', 'in_file')]),
-        (provenance_input, ds_workflow_provenance_report, \
-            [('out_dir', 'out_dir'), ('filename', 'filename')]),
-    ])
+    workflow.connect(
+        [
+            # Subject Summary Report
+            (subject_summary_node, ds_report_summary, [('out_report', 'in_file')]),
+            (summary_input, ds_report_summary, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+            # Execution Provenance Report
+            (exec_provenance_node, ds_report_about, [('out_report', 'in_file')]),
+            (about_input, ds_report_about, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+            # Error Report
+            (
+                dlmuse_node,
+                check_dlmuse_outputs_node,
+                [
+                    ('dlmuse_segmentation', 'segmentation_file'),
+                    ('dlmuse_volumes', 'volumes_csv_file'),
+                ],
+            ),
+            (
+                check_dlmuse_outputs_node,
+                error_report_node,
+                [('error_messages_list', 'error_messages')],
+            ),
+            (error_report_node, ds_error_report, [('out_report', 'in_file')]),
+            (errors_input, ds_error_report, [('out_dir', 'out_dir'), ('filename', 'filename')]),
+            # Workflow Provenance Report
+            (
+                create_volumes_json_node,
+                workflow_provenance_report_node,
+                [('output_json_path', 'provenance_json_file')],
+            ),
+            (
+                workflow_provenance_report_node,
+                ds_workflow_provenance_report,
+                [('out_report', 'in_file')],
+            ),
+            (
+                provenance_input,
+                ds_workflow_provenance_report,
+                [('out_dir', 'out_dir'), ('filename', 'filename')],
+            ),
+        ]
+    )
 
     # === END HTML Report Generation ===
 
-    return clean_datasinks(workflow) # Apply clean_datasinks
+    return clean_datasinks(workflow)  # Apply clean_datasinks
+
 
 # --- Helper functions for _create_volumes_json_file ---
+
 
 def _check_dlmuse_outputs(segmentation_file, volumes_csv_file):
     """Check if DLMUSE outputs exist and are not empty."""
     from pathlib import Path
 
     error_messages = []
-    if not (segmentation_file and Path(segmentation_file).exists() \
-        and Path(segmentation_file).stat().st_size > 0):
+    if not (
+        segmentation_file
+        and Path(segmentation_file).exists()
+        and Path(segmentation_file).stat().st_size > 0
+    ):
         error_messages.append('NiChart_DLMUSE segmentation output NIfTI file is missing or empty.')
-    if not (volumes_csv_file and Path(volumes_csv_file).exists() \
-        and Path(volumes_csv_file).stat().st_size > 0):
+    if not (
+        volumes_csv_file
+        and Path(volumes_csv_file).exists()
+        and Path(volumes_csv_file).stat().st_size > 0
+    ):
         error_messages.append('NiChart_DLMUSE volumes output CSV file is missing or empty.')
 
     # If no errors were added, ensure the list is not empty & ErrorReportlet shows "no errors"
     # if not error_messages: # This logic is handled by ErrorReportlet if it receives an empty list
     #     pass # ErrorReportlet handles empty list by showing "no specific errors"
     return error_messages
+
 
 def _copy_atlas_mapping(source_tsv_path_str, output_dir_str):
     """Copy the atlas mapping TSV and JSON files to the output directory if they don't exist,
@@ -898,8 +928,9 @@ def _copy_atlas_mapping(source_tsv_path_str, output_dir_str):
     target_json_path = output_dir / target_json_filename
 
     LOGGER.info(
-    f'Checking for {target_tsv_filename} and {target_json_filename} in target '
-    f'directory: {output_dir}')
+        f'Checking for {target_tsv_filename} and {target_json_filename} in target '
+        f'directory: {output_dir}'
+    )
 
     try:
         # Create directories if they don't exist
@@ -914,25 +945,25 @@ def _copy_atlas_mapping(source_tsv_path_str, output_dir_str):
             LOGGER.info(
                 f'Atlas mapping TSV {target_tsv_filename} already exists at '
                 f'{target_tsv_path}. Skipping copy.'
-                )
+            )
 
         # Copy JSON if source exists and target doesn't exist
         if source_json_path.exists():
             if not target_json_path.exists():
                 LOGGER.info(
                     f'Copying atlas mapping JSON from {source_json_path} to {target_json_path}'
-                    )
+                )
                 shutil.copy2(source_json_path, target_json_path)
                 LOGGER.info(f'Successfully copied atlas mapping JSON to {target_json_path}')
             else:
                 LOGGER.info(
                     f'Atlas mapping JSON {target_json_filename} already exists at '
                     f'{target_json_path}. Skipping copy.'
-                    )
-        else:
-             LOGGER.warning(
-                f'Source atlas mapping JSON not found at {source_json_path}. Cannot copy.'
                 )
+        else:
+            LOGGER.warning(
+                f'Source atlas mapping JSON not found at {source_json_path}. Cannot copy.'
+            )
 
         # No specific file path to return as multiple files are handled
         return None
@@ -947,6 +978,7 @@ def _copy_single_file(in_file, out_file):
     """Copies a single file using shutil.copy2, creating destination directory."""
     import shutil
     from pathlib import Path
+
     out_path = Path(out_file)
     # Ensure parent directory exists
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -994,11 +1026,8 @@ def _to_snake_case(text):
 
 # pyright: ignore
 def _create_volumes_json_file(
-    volumes_csv,
-    source_t1w_json_path,
-    device_used,
-    roi_list_tsv,
-    source_file=None):
+    volumes_csv, source_t1w_json_path, device_used, roi_list_tsv, source_file=None
+):
     """Create JSON with raw T1w metadata, provenance, and volumes, writing it to a file.
 
     Uses roi_list_tsv to map NiChartDLMUSE output keys to Full_Name.
@@ -1044,17 +1073,19 @@ def _create_volumes_json_file(
             input_key = _to_snake_case(str(row['ID']))
             output_key = _to_snake_case(row['Full_Name'])
             roi_mapping[input_key] = output_key
-        LOGGER.info(f'Successfully created ROI mapping from {roi_list_tsv}. '
-                    f'{len(roi_mapping)} entries.')
+        LOGGER.info(
+            f'Successfully created ROI mapping from {roi_list_tsv}. {len(roi_mapping)} entries.'
+        )
     except FileNotFoundError:
         LOGGER.error(f'ROI list file not found: {roi_list_tsv}. Cannot map volume names.')
         # Proceeding with original names for now, but logging error.
     except KeyError as e:
-        LOGGER.error(f'Missing expected column ({e}) in ROI list file: {roi_list_tsv}. '
-                    f'Cannot map volume names.')
+        LOGGER.error(
+            f'Missing expected column ({e}) in ROI list file: {roi_list_tsv}. '
+            f'Cannot map volume names.'
+        )
     except (OSError, json.JSONDecodeError, ValueError) as e:
         LOGGER.error(f'Error reading or processing ROI list file {roi_list_tsv}: {e!r}')
-
 
     # 1. bids_meta: Read from the provided source T1w JSON sidecar path
     bids_meta_dict = {}
@@ -1073,7 +1104,7 @@ def _create_volumes_json_file(
 
     # 2. Read volumes CSV/TSV
     volumes_dict = {}
-    volumes_ordered_dict = OrderedDict() # Initialize OrderedDict
+    volumes_ordered_dict = OrderedDict()  # Initialize OrderedDict
     try:
         LOGGER.info(f'Attempting to read volumes from: {volumes_csv}')
         volumes_df = pd.read_csv(volumes_csv, sep='\t')
@@ -1091,11 +1122,13 @@ def _create_volumes_json_file(
                 if final_key:
                     volumes_dict[final_key] = value
                 else:
-                    LOGGER.warning(f'Skipping volume key "{orig_key}" (snake_case: '
-                    f'"{snake_key}") due to mapping issue or empty result.')
+                    LOGGER.warning(
+                        f'Skipping volume key "{orig_key}" (snake_case: '
+                        f'"{snake_key}") due to mapping issue or empty result.'
+                    )
 
             # Create OrderedDict with 'mrid' first
-            mrid_key = roi_mapping.get('mrid', 'mrid') # Get mapped mrid key, default to 'mrid'
+            mrid_key = roi_mapping.get('mrid', 'mrid')  # Get mapped mrid key, default to 'mrid'
             if mrid_key in volumes_dict:
                 volumes_ordered_dict[mrid_key] = volumes_dict.pop(mrid_key)
 
@@ -1108,15 +1141,13 @@ def _create_volumes_json_file(
             LOGGER.error(f'Volumes TSV/CSV file was read successfully but is empty: {volumes_csv}')
     except FileNotFoundError:
         LOGGER.error(f'Volumes input file not found: {volumes_csv}')
-        raise # Reraise to ensure node failure
+        raise  # Reraise to ensure node failure
     except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
-        LOGGER.error(
-            f'Error reading or processing volumes TSV/CSV {volumes_csv}: {e!r}'
-        )
-        raise # Reraise to ensure node failure
+        LOGGER.error(f'Error reading or processing volumes TSV/CSV {volumes_csv}: {e!r}')
+        raise  # Reraise to ensure node failure
 
     # 3. provenance: Gather system/version info
-    LOGGER.info('Gathering provenance information...') # Add log
+    LOGGER.info('Gathering provenance information...')  # Add log
     nichartdlmuse_version = None
     try:
         # Attempt to run NiChart_DLMUSE --version
@@ -1172,14 +1203,14 @@ def _create_volumes_json_file(
     final_json_dict = {
         'bids_meta': bids_meta_dict,
         'provenance': provenance,
-        'volumes': volumes_ordered_dict, # Use the OrderedDict
+        'volumes': volumes_ordered_dict,  # Use the OrderedDict
     }
-    LOGGER.info(f'Final dictionary assembled: {list(final_json_dict.keys())}') # Log keys
+    LOGGER.info(f'Final dictionary assembled: {list(final_json_dict.keys())}')  # Log keys
 
     # Output filename within the node's working directory
     out_filename = 'combined_volumes_metadata.json'
     out_file_path = Path(os.getcwd()) / out_filename
-    LOGGER.info(f'Attempting to write final JSON to: {out_file_path}') # Log path
+    LOGGER.info(f'Attempting to write final JSON to: {out_file_path}')  # Log path
 
     # Write the combined dictionary to the JSON file
     try:
@@ -1193,20 +1224,24 @@ def _create_volumes_json_file(
     # Return the absolute path to the created JSON file
     return str(out_file_path)
 
+
 # Helper functions inspired by fMRIPrep
 def _prefix(subid):
     """Ensure subject ID is prefixed with 'sub-'."""
     return subid if subid.startswith('sub-') else f'sub-{subid}'
 
+
 def _make_list(item):
     """Wrap an item in a list if it's not already a list."""
     return item if isinstance(item, list) else [item]
+
 
 def _select_first_from_list(file_input):
     """Select a file path, accepting either a single string or a list containing one string."""
     from pathlib import Path
 
     from ncdlmuse import config
+
     _LOGGER_INSIDE_FUNCTION = config.loggers.workflow
 
     path_to_check = None
@@ -1227,26 +1262,27 @@ def _select_first_from_list(file_input):
             f'got {type(file_input)}: {file_input}'
         )
         raise ValueError(
-            f'Expected a list or a path string for a required file, '
-            f'got {type(file_input)}.'
+            f'Expected a list or a path string for a required file, got {type(file_input)}.'
         )
 
     if path_to_check and Path(path_to_check).exists():
-        return str(path_to_check) # Ensure returning a string path
+        return str(path_to_check)  # Ensure returning a string path
 
     _LOGGER_INSIDE_FUNCTION.error(
         f'BIDSDataGrabber did not return a valid existing file for a required field. '
         f'Path checked: {path_to_check}, Original input: {file_input}'
     )
     raise ValueError(
-    'BIDSDataGrabber did not provide a valid existing file path for a required file.'
+        'BIDSDataGrabber did not provide a valid existing file path for a required file.'
     )
+
 
 def _select_first_from_list_or_none(file_input):
     """Select a file path if valid (from string or list), otherwise return None."""
     from pathlib import Path
 
     from ncdlmuse import config
+
     _LOGGER_INSIDE_FUNCTION = config.loggers.workflow
 
     path_to_check = None
@@ -1256,7 +1292,7 @@ def _select_first_from_list_or_none(file_input):
         # If list is empty or first element is None/empty, path_to_check remains None
     elif isinstance(file_input, str | Path):
         path_to_check = file_input
-    elif file_input is None: # Explicitly handle None input
+    elif file_input is None:  # Explicitly handle None input
         return None
     else:
         _LOGGER_INSIDE_FUNCTION.warning(
@@ -1266,9 +1302,9 @@ def _select_first_from_list_or_none(file_input):
         return None
 
     if path_to_check and Path(path_to_check).exists():
-        return str(path_to_check) # Ensure returning a string path
+        return str(path_to_check)  # Ensure returning a string path
 
-    if path_to_check: # Path was provided but does not exist
+    if path_to_check:  # Path was provided but does not exist
         _LOGGER_INSIDE_FUNCTION.info(
             f'Optional file path from BIDSDataGrabber does not exist or was invalid: '
             f'{path_to_check}. Original input: {file_input}. Returning None.'
@@ -1276,6 +1312,7 @@ def _select_first_from_list_or_none(file_input):
     # If path_to_check was None from the start (e.g. empty list, or None input),
     # just return None silently for optional.
     return None
+
 
 def clean_datasinks(workflow: Workflow) -> Workflow:
     """Set ``out_path_base`` to '' for all DataSinks.
@@ -1290,6 +1327,7 @@ def clean_datasinks(workflow: Workflow) -> Workflow:
             if hasattr(node.interface, 'out_path_base'):
                 node.interface.out_path_base = ''
     return workflow
+
 
 # --- Add helper function for direct file saving ---
 def _save_file_directly(in_file, out_dir, filename):

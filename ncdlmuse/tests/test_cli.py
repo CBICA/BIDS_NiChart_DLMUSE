@@ -1,6 +1,5 @@
 """Command-line interface tests using synthetic data."""
 
-
 import pytest
 from nipype import config as nipype_config
 
@@ -17,6 +16,7 @@ nipype_config.enable_debug_mode()
 
 # --- Helper Functions (Simplified for Build-Only Tests) ---
 
+
 def _build_and_check(parameters):
     """Parse args, build workflow, check for success."""
     parameters.extend(['--stop-on-first-crash', '-vv'])  # Add common flags
@@ -24,8 +24,7 @@ def _build_and_check(parameters):
     # Ensure paths exist for parser if needed, but fixtures handle this now
     parse_args(parameters)  # Populates config
     config_file = (
-        ncdlmuse_config.execution.work_dir /
-        f'config-{ncdlmuse_config.execution.run_uuid}.toml'
+        ncdlmuse_config.execution.work_dir / f'config-{ncdlmuse_config.execution.run_uuid}.toml'
     )
     ncdlmuse_config.to_filename(config_file)
 
@@ -47,6 +46,7 @@ def _build_and_check(parameters):
     # Return retval for potential further checks if needed
     return retval
 
+
 def _build_and_fail(parameters, error_type=RuntimeError, error_match='.*'):
     """Parse args, expect build_workflow to fail."""
     parameters.extend(['--stop-on-first-crash', '-vv'])
@@ -56,8 +56,8 @@ def _build_and_fail(parameters, error_type=RuntimeError, error_match='.*'):
         try:
             parse_args(parameters)  # Let parser run first
             config_file = (
-                ncdlmuse_config.execution.work_dir /
-                f'config-{ncdlmuse_config.execution.run_uuid}.toml'
+                ncdlmuse_config.execution.work_dir
+                / f'config-{ncdlmuse_config.execution.run_uuid}.toml'
             )
             ncdlmuse_config.to_filename(config_file)
             # Failure might happen during build_workflow (e.g., BIDS query fails)
@@ -78,19 +78,20 @@ def _build_and_fail(parameters, error_type=RuntimeError, error_match='.*'):
 
 # --- Parametrized Tests --- #
 
+
 @pytest.mark.cli_basic
 @pytest.mark.parametrize(
     ('subject_id', 'session_id', 'extra_flags'),
     [
-        ('01', None, []),                                  # Default subject
-        ('02', 'ses01', []),                               # Subject with session
-        ('01', None, ['--disable-tta']),                   # Option flag
-        ('01', None, ['--clear-cache']),                   # Another option
-        ('02', 'ses01', ['--all-in-gpu']),                 # Option with session
-        ('01', None, ['--skip-bids-validation']),          # Skip validation
-        ('01', None, ['--device=cuda']),                   # Different device
-        ('01', None, ['--nthreads=2', '--omp-nthreads=2']),# Resource flags
-    ]
+        ('01', None, []),  # Default subject
+        ('02', 'ses01', []),  # Subject with session
+        ('01', None, ['--disable-tta']),  # Option flag
+        ('01', None, ['--clear-cache']),  # Another option
+        ('02', 'ses01', ['--all-in-gpu']),  # Option with session
+        ('01', None, ['--skip-bids-validation']),  # Skip validation
+        ('01', None, ['--device=cuda']),  # Different device
+        ('01', None, ['--nthreads=2', '--omp-nthreads=2']),  # Resource flags
+    ],
 )
 def test_cli_build_success(
     bids_skeleton_factory, work_dir, out_dir, subject_id, session_id, extra_flags
@@ -126,11 +127,19 @@ def test_cli_build_success(
         ('nonexistent_bids', '01', None, [], SystemExit, ''),
         # Valid BIDS, wrong subject
         ('no_t1w_found', '03', None, [], RuntimeError, 'No T1w files were found'),
-    ]
+    ],
 )
 def test_cli_build_failures(
-    bids_skeleton_factory, work_dir, out_dir, tmp_path, test_desc,
-    subject_id, session_id, extra_flags, error_type, error_match
+    bids_skeleton_factory,
+    work_dir,
+    out_dir,
+    tmp_path,
+    test_desc,
+    subject_id,
+    session_id,
+    extra_flags,
+    error_type,
+    error_match,
 ):
     """Test CLI/workflow build failures for various reasons."""
     if test_desc == 'nonexistent_bids':
