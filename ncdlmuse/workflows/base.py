@@ -394,10 +394,13 @@ def init_single_subject_wf(
 
 This workflow performs deep-learning based brain extraction and segmentation using NiChart_DLMUSE
 on T1-weighted (T1w) images.
-Brain extraction is done using DLICV (https://github.com/CBICA/DLICV). Brain segmentation is done
-using DLMUSE (https://github.com/CBICA/NiChart_DLMUSE), which is based on the MUSE framework
-(MUlti-atlas region Segmentation utilizing Ensembles of registration algorithms and parameters,
-and locally optimal atlas selection) [@muse].
+
+Brain extraction is done using [DLICV](https://github.com/CBICA/DLICV).
+
+Brain segmentation is done using [DLMUSE](https://github.com/CBICA/DLMUSE).
+
+This is based on the MUSE framework (MUlti-atlas region Segmentation utilizing Ensembles of
+registration algorithms and parameters, and locally optimal atlas selection) [@muse].
 
 The results include:
 
@@ -407,10 +410,11 @@ The results include:
 * HTML summary for visual quality control of DLICV and DLMUSE outputs.
 """
     workflow.__postdesc__ = f"""\
-For more details on the pipeline and methodologies, please consult the
-official documentation at https://github.com/CBICA/NiChart_DLMUSE.
 
-NCDLMUSE is built using *Nipype* version {config.environment.nipype_version}
+For more details on the pipeline and methodologies, please consult the
+[official documentation](https://github.com/CBICA/NiChart_DLMUSE).
+
+BIDS_NiChart_DLMUSE is built using *Nipype* version {config.environment.nipype_version}
 [@nipype; RRID:SCR_002502].
 
 ## References

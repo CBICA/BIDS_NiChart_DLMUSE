@@ -138,6 +138,7 @@ def build_boilerplate(config_file, workflow):
 
     config.load(config_file)
     logs_path = config.execution.ncdlmuse_dir / 'logs'
+    logs_path.mkdir(parents=True, exist_ok=True)
     boilerplate = workflow.visit_desc()
     citation_files = {ext: logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')}
 
