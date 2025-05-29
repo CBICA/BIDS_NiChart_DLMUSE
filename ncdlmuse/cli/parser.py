@@ -612,72 +612,6 @@ def parse_args(args=None, namespace=None):
         config.execution.work_dir.mkdir(exist_ok=True, parents=True)
         build_log.info(f'Using working directory: {config.execution.work_dir}')
 
-        # --- Log Dir & File Logging Setup ---
-        run_uuid = config.execution.run_uuid  # Ensure run_uuid is accessed/initialized
-
-        # For participant level, create subject-specific log directories following XCP-D pattern
-        if config.execution.participant_label:
-            if len(config.execution.participant_label) == 1:
-                subj_label = config.execution.participant_label[0]
-                config.execution.log_dir = (
-                    config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'log' / run_uuid
-                )
-                build_log.info(
-                    f'Participant run for {subj_label}, '
-                    f'using log directory: {config.execution.log_dir}'
-                )
-            else:
-                # For multi-participant runs, we'll create individual subject log
-                subj_label = config.execution.participant_label[0]
-                config.execution.log_dir = (
-                    config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'log' / run_uuid
-                )
-                build_log.info(
-                    'Multi-participant run, will create log directories for each subject'
-                )
-        else:
-            # This shouldn't happen for participant level, but as fallback
-            log_dir_base = config.execution.ncdlmuse_dir / 'logs'
-            config.execution.log_dir = log_dir_base / run_uuid
-            build_log.info(f'Using default log directory: {config.execution.log_dir}')
-
-        config.execution.log_dir.mkdir(exist_ok=True, parents=True)  # Create log_dir
-        # Note: No file-based logging setup here - only toml files will be created
-
-        # --- Nipype Configuration ---
-        nipype_settings = {
-            'logging': {
-                'log_directory': str(config.execution.log_dir),
-                'log_to_file': False,
-                'workflow_level': logging.getLevelName(log_level),
-                'interface_level': logging.getLevelName(log_level),
-            },
-            'execution': {
-                'crashdump_dir': str(config.execution.log_dir),
-                'stop_on_first_crash': config.nipype.stop_on_first_crash,
-                'hash_method': 'content',
-                'crashfile_format': 'txt',
-                'remove_unnecessary_outputs': False,
-                'remove_node_directories': False,
-                'check_version': False,
-                'get_linked_libs': config.nipype.get_linked_libs,
-            },
-            'monitoring': {
-                'enabled': config.nipype.resource_monitor,
-                'sample_frequency': '0.5',
-                'summary_append': True,
-            }
-            if config.nipype.resource_monitor
-            else {},
-        }
-        nipype_config.update_config(nipype_settings)
-        nipype_config.enable_debug_mode()
-        for logger_name in ['nipype.workflow', 'nipype.interface', 'nipype.utils']:
-            logging.getLogger(logger_name).propagate = True
-        logging.getLogger('cli').propagate = False
-
-        config_file_path = config.execution.log_dir / 'ncdlmuse.toml'
-
     else:  # === GROUP LEVEL ANALYSIS ===
         config.execution.work_dir = None
         config.execution.log_dir = None
@@ -685,11 +619,6 @@ def parse_args(args=None, namespace=None):
             'Group analysis: Skipping creation of work_dir and log_dir/file-logging setup.'
         )
         config_file_path = None  # Explicitly set to None
-
-    current_config_dict = {
-        'execution': {'work_dir': config.execution.work_dir, 'log_dir': config.execution.log_dir}
-    }
-    config.from_dict(current_config_dict, init=False)
 
     # --- Resource Management Checks ---
     if config.execution.analysis_level != 'group':
@@ -855,6 +784,80 @@ def parse_args(args=None, namespace=None):
             # earlier exit or critical error.
             if config.execution.analysis_level != 'group':
                 sys.exit(1)  # Exit only if participant mode and layout is missing
+
+    # --- Log Dir & File Logging Setup (after subject selection) ---
+    if config.execution.analysis_level != 'group':
+        run_uuid = config.execution.run_uuid  # Ensure run_uuid is accessed/initialized
+
+        if config.execution.participant_label:
+            if len(config.execution.participant_label) == 1:
+                subj_label = config.execution.participant_label[0]
+                config.execution.log_dir = (
+                    config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'log' / run_uuid
+                )
+                build_log.info(
+                    f'Participant run for {subj_label}, '
+                    f'using log directory: {config.execution.log_dir}'
+                )
+            else:
+                # For multi-participant runs, use first subject for main log_dir
+                subj_label = config.execution.participant_label[0]
+                config.execution.log_dir = (
+                    config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'log' / run_uuid
+                )
+                build_log.info(
+                    f'Multi-participant run, main log directory: {config.execution.log_dir}'
+                )
+        else:
+            # This shouldn't happen for participant level, but as fallback
+            # Create a temporary log directory that doesn't interfere with citation files
+            temp_log_dir_base = config.execution.ncdlmuse_dir / 'temp_logs'
+            config.execution.log_dir = temp_log_dir_base / run_uuid
+            build_log.warning(
+                f'Using temporary log directory (this should not happen): '
+                f'{config.execution.log_dir}'
+            )
+
+        config.execution.log_dir.mkdir(exist_ok=True, parents=True)  # Create log_dir
+
+        # --- Nipype Configuration ---
+        nipype_settings = {
+            'logging': {
+                'log_directory': str(config.execution.log_dir),
+                'log_to_file': False,
+                'workflow_level': logging.getLevelName(log_level),
+                'interface_level': logging.getLevelName(log_level),
+            },
+            'execution': {
+                'crashdump_dir': str(config.execution.log_dir),
+                'stop_on_first_crash': config.nipype.stop_on_first_crash,
+                'hash_method': 'content',
+                'crashfile_format': 'txt',
+                'remove_unnecessary_outputs': False,
+                'remove_node_directories': False,
+                'check_version': False,
+                'get_linked_libs': config.nipype.get_linked_libs,
+            },
+            'monitoring': {
+                'enabled': config.nipype.resource_monitor,
+                'sample_frequency': '0.5',
+                'summary_append': True,
+            }
+            if config.nipype.resource_monitor
+            else {},
+        }
+        nipype_config.update_config(nipype_settings)
+        nipype_config.enable_debug_mode()
+        for logger_name in ['nipype.workflow', 'nipype.interface', 'nipype.utils']:
+            logging.getLogger(logger_name).propagate = True
+        logging.getLogger('cli').propagate = False
+
+        config_file_path = config.execution.log_dir / 'ncdlmuse.toml'
+
+    current_config_dict = {
+        'execution': {'work_dir': config.execution.work_dir, 'log_dir': config.execution.log_dir}
+    }
+    config.from_dict(current_config_dict, init=False)
 
     # --- Final Path Checks ---
     # Ensure output_dir is not inside bids_dir

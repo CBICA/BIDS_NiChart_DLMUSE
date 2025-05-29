@@ -389,18 +389,18 @@ def init_single_subject_wf(
     subject_id_str = _prefix(subject_id)
 
     # Workflow description (for reports)
-    workflow.__desc__ = f"""\
-NCDLMUSE: NiChart DLMUSE BIDS App version {config.environment.version}
+    workflow.__desc__ = """\
+NCDLMUSE: BIDS App wrapper for NiChart_DLMUSE
 
 This workflow performs deep-learning based brain extraction and segmentation using NiChart_DLMUSE
 on T1-weighted (T1w) images.
-The segmentation is based on the MUSE (MUlti-atlas region Segmentation utilizing Ensembles of
-registration algorithms and parameters, and locally optimal atlas selection) framework (@muse).
+The segmentation is based on the MUSE framework (MUlti-atlas region Segmentation utilizing
+Ensembles of registration algorithms and parameters, and locally optimal atlas selection; @muse).
 
 The results include:
 * Segmented T1w in native space.
 * Brain mask.
-* JSON files containing ROIs' volumes information.
+* JSON files containing ROIs' volumes.
 * HTML summary for visual quality control of DLICV and DLMUSE outputs.
 """
     workflow.__postdesc__ = f"""\

@@ -12,7 +12,7 @@ ENV HUGGINGFACE_HUB_CACHE=/tmp/huggingface
 
 # System deps
 RUN apt-get update && \
-    apt-get install -y git ca-certificates && \
+    apt-get install -y git ca-certificates pandoc && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /tmp/huggingface
