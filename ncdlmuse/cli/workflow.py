@@ -172,12 +172,14 @@ def build_boilerplate(config_file, workflow):
 
         from ncdlmuse.data import load as load_data
 
-        # Generate HTML version (simplified command to avoid citation issues)
         cmd = [
             'pandoc',
             '-s',
+            '--bibliography',
+            str(load_data('boilerplate.bib')),
+            '--citeproc',
             '--metadata',
-            'pagetitle="NCDLMUSE citation boilerplate"',
+            'pagetitle="BIDS_NiChart_DLMUSE citation boilerplate"',
             str(citation_files['md']),
             '-o',
             str(citation_files['html']),

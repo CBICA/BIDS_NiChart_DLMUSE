@@ -390,12 +390,14 @@ def init_single_subject_wf(
 
     # Workflow description (for reports)
     workflow.__desc__ = """\
-NCDLMUSE: BIDS App wrapper for NiChart_DLMUSE
+## BIDS_NiChart_DLMUSE: BIDS App wrapper for NiChart_DLMUSE
 
 This workflow performs deep-learning based brain extraction and segmentation using NiChart_DLMUSE
 on T1-weighted (T1w) images.
-The segmentation is based on the MUSE framework (MUlti-atlas region Segmentation utilizing
-Ensembles of registration algorithms and parameters, and locally optimal atlas selection) [@muse].
+Brain extraction is done using DLICV (https://github.com/CBICA/DLICV). Brain segmentation is done
+using DLMUSE (https://github.com/CBICA/NiChart_DLMUSE), which is based on the MUSE framework
+(MUlti-atlas region Segmentation utilizing Ensembles of registration algorithms and parameters,
+and locally optimal atlas selection) [@muse].
 
 The results include:
 
@@ -413,10 +415,6 @@ NCDLMUSE is built using *Nipype* version {config.environment.nipype_version}
 
 ## References
 
-Doshi, Jimit, Guray Erus, Yangming Ou, Bilwaj Gaonkar, and Christos Davatzikos.
-"MUSE: MUlti-atlas region Segmentation utilizing Ensembles of registration algorithms and
-parameters, and locally optimal atlas selection." NeuroImage 127 (2016): 186-195.
-https://doi.org/10.1016/j.neuroimage.2015.11.073
 """
 
     # Initialize default node configs
