@@ -134,141 +134,66 @@ def build_workflow(config_file, retval):
 
 def build_boilerplate(config_file, workflow):
     """Write boilerplate in an isolated process."""
-    import traceback
-
     from ncdlmuse import config
 
-    # Create a debug log file to capture what's happening
-    debug_log_file = None
-    try:
-        config.load(config_file)
+    config.load(config_file)
+    logs_path = config.execution.ncdlmuse_dir / 'logs'
+    boilerplate = workflow.visit_desc()
+    citation_files = {ext: logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')}
 
-        # Create debug log file in the logs directory
-        citation_logs_path = config.execution.ncdlmuse_dir / 'logs'
-        citation_logs_path.mkdir(parents=True, exist_ok=True)
-        debug_log_file = citation_logs_path / 'boilerplate_debug.log'
-
-        def debug_log(message):
-            """Log to both config logger and debug file."""
+    if boilerplate:
+        # To please git-annex users and also to guarantee consistency
+        # among different renderings of the same file, first remove any
+        # existing one
+        for citation_file in citation_files.values():
             try:
-                config.loggers.cli.info(message)
-            except (AttributeError, RuntimeError):
-                # Logger might not be available in subprocess
+                citation_file.unlink()
+            except FileNotFoundError:
                 pass
-            if debug_log_file:
-                try:
-                    with open(debug_log_file, 'a') as f:
-                        f.write(f'{message}\n')
-                        f.flush()
-                except (OSError, PermissionError):
-                    # Can't write to debug file, but don't fail
-                    pass
 
-        debug_log('Starting citation boilerplate generation...')
-        debug_log(f'Config file: {config_file}')
-        debug_log(f'Citation logs directory: {citation_logs_path}')
+    citation_files['md'].write_text(boilerplate)
 
-        citation_files = {
-            ext: citation_logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')
-        }
-        debug_log(f'Citation files to generate: {list(citation_files.keys())}')
+    if not config.execution.md_only_boilerplate and citation_files['md'].exists():
+        from shutil import copyfile
+        from subprocess import CalledProcessError, TimeoutExpired, check_call
 
-        # Check if citation files already exist and skip if they do
-        existing_files = [f for f in citation_files.values() if f.exists()]
-        if existing_files:
-            debug_log(
-                f'Citation files exist: {[f.name for f in existing_files]}. Skipping generation.'
-            )
-            return
+        from ncdlmuse.data import load as load_data
 
-        debug_log('No existing citation files found, proceeding with generation.')
+        # Generate HTML file resolving citations
+        cmd = [
+            'pandoc',
+            '-s',
+            '--bibliography',
+            str(load_data('boilerplate.bib')),
+            '--citeproc',
+            '--metadata',
+            'pagetitle="NCDLMUSE citation boilerplate"',
+            str(citation_files['md']),
+            '-o',
+            str(citation_files['html']),
+        ]
 
-        boilerplate = workflow.visit_desc()
-        debug_log(
-            f'Generated boilerplate content: {len(boilerplate) if boilerplate else 0} characters'
-        )
+        config.loggers.cli.info('Generating an HTML version of the citation boilerplate...')
+        try:
+            check_call(cmd, timeout=10)
+        except (FileNotFoundError, CalledProcessError, TimeoutExpired):
+            config.loggers.cli.warning('Could not generate CITATION.html file:\n%s', ' '.join(cmd))
 
-        if not boilerplate:
-            debug_log('No boilerplate content generated. Skipping citation files.')
-            return
-
-        # Generate the markdown file first
-        citation_files['md'].write_text(boilerplate)
-        debug_log(f'Generated {citation_files["md"].name}')
-
-        if not config.execution.md_only_boilerplate:
-            from shutil import copyfile, which
-            from subprocess import CalledProcessError, TimeoutExpired, check_call
-
-            from ncdlmuse.data import load as load_data
-
-            # Check if pandoc is available
-            pandoc_path = which('pandoc')
-            if not pandoc_path:
-                debug_log('Pandoc not found in PATH. Skipping HTML and TeX generation.')
-                return
-
-            debug_log(f'Found pandoc at: {pandoc_path}')
-
-            # Generate HTML version (using bibliography for proper citation processing)
-            cmd = [
-                'pandoc',
-                '-s',
-                '--bibliography',
-                str(load_data('boilerplate.bib')),
-                '--citeproc',
-                '--metadata',
-                'pagetitle=BIDS_NiChart_DLMUSE citation boilerplate',
-                str(citation_files['md']),
-                '-o',
-                str(citation_files['html']),
-            ]
-
-            debug_log('Generating an HTML version of the citation boilerplate...')
-            debug_log(f'Pandoc command: {" ".join(cmd)}')
-            try:
-                check_call(cmd, timeout=10)
-                debug_log(f'Generated {citation_files["html"].name}')
-            except (FileNotFoundError, CalledProcessError, TimeoutExpired) as e:
-                debug_log(f'Could not generate CITATION.html file: {e}')
-
-            # Generate LaTeX version
-            cmd = [
-                'pandoc',
-                '-s',
-                '--bibliography',
-                str(load_data('boilerplate.bib')),
-                '--natbib',
-                str(citation_files['md']),
-                '-o',
-                str(citation_files['tex']),
-            ]
-            debug_log('Generating a LaTeX version of the citation boilerplate...')
-            debug_log(f'Pandoc command: {" ".join(cmd)}')
-            try:
-                check_call(cmd, timeout=10)
-                debug_log(f'Generated {citation_files["tex"].name}')
-                # Only copy bib file if tex generation succeeded
-                copyfile(load_data('boilerplate.bib'), citation_files['bib'])
-                debug_log(f'Generated {citation_files["bib"].name}')
-            except (FileNotFoundError, CalledProcessError, TimeoutExpired) as e:
-                debug_log(f'Could not generate CITATION.tex file: {e}')
+        # Generate LaTex file resolving citations
+        cmd = [
+            'pandoc',
+            '-s',
+            '--bibliography',
+            str(load_data('boilerplate.bib')),
+            '--natbib',
+            str(citation_files['md']),
+            '-o',
+            str(citation_files['tex']),
+        ]
+        config.loggers.cli.info('Generating a LaTeX version of the citation boilerplate...')
+        try:
+            check_call(cmd, timeout=10)
+        except (FileNotFoundError, CalledProcessError, TimeoutExpired):
+            config.loggers.cli.warning('Could not generate CITATION.tex file:\n%s', ' '.join(cmd))
         else:
-            debug_log('md_only_boilerplate is True, skipping HTML and TeX generation.')
-
-        debug_log('Citation boilerplate generation completed.')
-
-    except Exception as e:
-        error_msg = f'Exception in build_boilerplate: {e}'
-        traceback_msg = f'Traceback: {traceback.format_exc()}'
-
-        # Try to log to debug file even if config logging fails
-        if debug_log_file:
-            try:
-                with open(debug_log_file, 'a') as f:
-                    f.write(f'{error_msg}\n{traceback_msg}\n')
-                    f.flush()
-            except (OSError, PermissionError):
-                # Can't write to debug file, but don't prevent the original exception
-                pass
-        raise
+            copyfile(load_data('boilerplate.bib'), citation_files['bib'])
