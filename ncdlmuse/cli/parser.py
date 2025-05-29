@@ -613,23 +613,36 @@ def parse_args(args=None, namespace=None):
         build_log.info(f'Using working directory: {config.execution.work_dir}')
 
         # --- Log Dir & File Logging Setup ---
-        log_dir_base = config.execution.ncdlmuse_dir / 'logs'
         run_uuid = config.execution.run_uuid  # Ensure run_uuid is accessed/initialized
-        if config.execution.participant_label and len(config.execution.participant_label) == 1:
-            subj_label = config.execution.participant_label[0]
-            config.execution.log_dir = (
-                config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'logs' / run_uuid
-            )
-            build_log.info(
-                f'Participant run for {subj_label}, '
-                f'using log directory: {config.execution.log_dir}'
-            )
+
+        # For participant level, create subject-specific log directories following XCP-D pattern
+        if config.execution.participant_label:
+            if len(config.execution.participant_label) == 1:
+                subj_label = config.execution.participant_label[0]
+                config.execution.log_dir = (
+                    config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'log' / run_uuid
+                )
+                build_log.info(
+                    f'Participant run for {subj_label}, '
+                    f'using log directory: {config.execution.log_dir}'
+                )
+            else:
+                # For multi-participant runs, we'll create individual subject log
+                subj_label = config.execution.participant_label[0]
+                config.execution.log_dir = (
+                    config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'log' / run_uuid
+                )
+                build_log.info(
+                    'Multi-participant run, will create log directories for each subject'
+                )
         else:
+            # This shouldn't happen for participant level, but as fallback
+            log_dir_base = config.execution.ncdlmuse_dir / 'logs'
             config.execution.log_dir = log_dir_base / run_uuid
             build_log.info(f'Using default log directory: {config.execution.log_dir}')
 
         config.execution.log_dir.mkdir(exist_ok=True, parents=True)  # Create log_dir
-        _setup_logging(log_level)  # Setup file-based logging into log_dir
+        # Note: No file-based logging setup here - only toml files will be created
 
         # --- Nipype Configuration ---
         nipype_settings = {
@@ -867,8 +880,22 @@ def parse_args(args=None, namespace=None):
     # --- Save Final Configuration ---
     try:
         if config_file_path:  # Path determined above based on analysis_level; None for group
-            config.to_filename(config_file_path)
-            build_log.info(f'Final configuration saved to: {config_file_path}')
+            # For multiple subjects, create individual config files for each subject
+            if config.execution.participant_label and len(config.execution.participant_label) > 1:
+                run_uuid = config.execution.run_uuid
+                for subj_label in config.execution.participant_label:
+                    subject_log_dir = (
+                        config.execution.ncdlmuse_dir / f'sub-{subj_label}' / 'log' / run_uuid
+                    )
+                    subject_log_dir.mkdir(exist_ok=True, parents=True)
+                    subject_config_path = subject_log_dir / 'ncdlmuse.toml'
+                    config.to_filename(subject_config_path)
+                    build_log.info(f'Configuration saved for {subj_label}: {subject_config_path}')
+            else:
+                # Single subject or fallback
+                config.to_filename(config_file_path)
+                build_log.info(f'Final configuration saved to: {config_file_path}')
+
         elif config.execution.analysis_level == 'group':
             build_log.info('Group analysis: Skipping saving of configuration file.')
         else:  # Should not happen if config_file_path is None only for group, but as safeguard
@@ -883,92 +910,3 @@ def parse_args(args=None, namespace=None):
     # This ensures that sections not explicitly touched (like 'workflow') are generated
     # with their defaults if they haven't been loaded or set.
     config.from_dict({})
-
-
-# --- Logging Setup ---
-
-
-def _setup_logging(level):
-    """Configure logging facilities for NCDLMUSE.
-
-    Sets up logging to standard output and derivatives log directory.
-    Allows Nipype log messages to propagate to the handlers defined here.
-    """
-    import sys
-
-    from nipype import config as ncfg  # Use nipype config directly for log settings
-
-    # Use log directory determined in parse_args
-    log_dir = config.execution.log_dir
-    log_file = log_dir / f'ncdlmuse_{config.execution.run_uuid}.log'
-
-    # Define log format
-    log_format = logging.Formatter(
-        '%(asctime)s %(name)s %(levelname)s:\n\t %(message)s',
-        datefmt='%y%m%d-%H:%M:%S',
-    )
-
-    # --- Root Logger Configuration ---
-    root_logger = logging.getLogger()
-
-    # Remove existing handlers to avoid duplicates if re-configuring
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-        try:
-            handler.close()
-        except OSError:
-            pass  # Ignore errors during handler closing
-
-    # Set root logger level *before* adding handlers
-    root_logger.setLevel(level)
-
-    # --- Console Handler ---
-    # Only add console handler if level is INFO or lower (more verbose)
-    # Or adjust this logic based on desired console output behavior
-    if level <= logging.INFO:  # Example: Show INFO and DEBUG on console
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(log_format)
-        console_handler.setLevel(level)  # Handler level respects root level
-        root_logger.addHandler(console_handler)
-
-    # --- File Handler ---
-    try:
-        # Use RotatingFileHandler from aslprep example
-        file_handler = logging.handlers.RotatingFileHandler(
-            log_file,
-            maxBytes=5 * 1024 * 1024,
-            backupCount=5,  # 5MB limit, 5 backups
-        )
-        file_handler.setFormatter(log_format)
-        file_handler.setLevel(level)  # Log everything >= level to file
-        root_logger.addHandler(file_handler)
-    except OSError as e:
-        # Fallback or warning if file logging fails
-        logging.getLogger('cli').error(f'Could not open log file {log_file}: {e}')
-
-    # --- Configure Nipype Logging ---
-    # Set Nipype's config to use our log directory and file logging
-    ncfg.update_config(
-        {
-            'logging': {
-                'log_directory': str(log_dir),
-                'log_to_file': False,  # Disable nipype's pypeline.log file
-            }
-        }
-    )
-    # Set Nipype's internal logging levels based on our overall level
-    nipype_level_str = logging.getLevelName(level)
-    ncfg.set('logging', 'workflow_level', nipype_level_str)
-    ncfg.set('logging', 'interface_level', nipype_level_str)
-
-    # --- Control Propagation ---
-    # Allow nipype messages to propagate to root logger's handlers
-    logging.getLogger('nipype.workflow').propagate = True
-    logging.getLogger('nipype.interface').propagate = True
-    logging.getLogger('nipype.utils').propagate = True
-
-    # Prevent double logging from our own CLI logger if it's separate
-    logging.getLogger('cli').propagate = False  # Already handled by root
-
-    logging.getLogger('cli').info(f'Logging configured (Level: {logging.getLevelName(level)})')
-    logging.getLogger('cli').info(f'Log file: {log_file}')

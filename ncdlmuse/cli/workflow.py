@@ -137,9 +137,17 @@ def build_boilerplate(config_file, workflow):
     from ncdlmuse import config
 
     config.load(config_file)
-    logs_path = config.execution.ncdlmuse_dir / 'logs'
+
+    # CITATION files always go in outdir/logs/ following XCP-D pattern
+    citation_logs_path = config.execution.ncdlmuse_dir / 'logs'
+
+    # Ensure citation logs directory exists
+    citation_logs_path.mkdir(parents=True, exist_ok=True)
+
     boilerplate = workflow.visit_desc()
-    citation_files = {ext: logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')}
+    citation_files = {
+        ext: citation_logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')
+    }
 
     if boilerplate:
         for citation_file in citation_files.values():

@@ -293,7 +293,7 @@ def main():
     # Import build_workflow here as it's participant-specific.
     # Needed for participant workflow
 
-    from .workflow import build_workflow
+    from .workflow import build_boilerplate, build_workflow
 
     # Set up a dictionary for retrieving workflow results
     with Manager() as mgr:
@@ -312,6 +312,18 @@ def main():
     if workflow is None:
         config.loggers.cli.critical('Workflow building did not return a workflow object.')
         return 1
+
+    # Generate citation boilerplate after successful workflow build
+    config.loggers.cli.info('Generating citation boilerplate.')
+    try:
+        with Manager() as mgr:
+            p = Process(target=build_boilerplate, args=(str(config_file), workflow))
+            p.start()
+            p.join()
+            if p.exitcode != 0:
+                config.loggers.cli.warning('Citation boilerplate generation failed.')
+    except (OSError, PermissionError, RuntimeError) as e:
+        config.loggers.cli.warning(f'Citation boilerplate generation failed: {e}')
 
     # Save workflow graph if requested
     if config.execution.write_graph:
