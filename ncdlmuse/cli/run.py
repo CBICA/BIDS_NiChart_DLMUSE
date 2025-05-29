@@ -293,7 +293,7 @@ def main():
     # Import build_workflow here as it's participant-specific.
     # Needed for participant workflow
 
-    from .workflow import build_workflow
+    from .workflow import build_boilerplate, build_workflow
 
     # Set up a dictionary for retrieving workflow results
     with Manager() as mgr:
@@ -312,6 +312,35 @@ def main():
     if workflow is None:
         config.loggers.cli.critical('Workflow building did not return a workflow object.')
         return 1
+
+    # Generate citation boilerplate after successful workflow build
+    config.loggers.cli.info('Generating citation boilerplate.')
+    try:
+        with Manager() as mgr:
+            p = Process(target=build_boilerplate, args=(str(config_file), workflow))
+            p.start()
+            p.join()
+
+            if p.exitcode != 0:
+                config.loggers.cli.warning(
+                    f'Citation boilerplate generation failed with exit code: {p.exitcode}'
+                )
+            else:
+                config.loggers.cli.info('Citation boilerplate generation completed successfully.')
+
+            # Check for debug log file to capture subprocess details
+            debug_log_path = config.execution.ncdlmuse_dir / 'logs' / 'boilerplate_debug.log'
+            if debug_log_path.exists():
+                try:
+                    debug_content = debug_log_path.read_text()
+                    config.loggers.cli.info(f'Boilerplate debug log contents:\n{debug_content}')
+                    # Clean up debug file
+                    debug_log_path.unlink()
+                except (OSError, PermissionError, UnicodeDecodeError) as e:
+                    config.loggers.cli.info(f'Could not read debug log: {e}')
+
+    except (OSError, PermissionError, RuntimeError) as e:
+        config.loggers.cli.warning(f'Citation boilerplate generation failed: {e}')
 
     # Save workflow graph if requested
     if config.execution.write_graph:

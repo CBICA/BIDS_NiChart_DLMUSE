@@ -12,8 +12,12 @@ ENV HUGGINGFACE_HUB_CACHE=/tmp/huggingface
 
 # System deps
 RUN apt-get update && \
-    apt-get install -y git ca-certificates && \
+    apt-get install -y git ca-certificates wget && \
     update-ca-certificates && \
+    # Install newer pandoc with --citeproc support (2.11+)
+    wget -O pandoc.deb https://github.com/jgm/pandoc/releases/download/3.1.13/pandoc-3.1.13-1-amd64.deb && \
+    dpkg -i pandoc.deb && \
+    rm pandoc.deb && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /tmp/huggingface
 

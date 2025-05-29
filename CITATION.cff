@@ -6,7 +6,7 @@ title: >-
   BIDS_NiChart_DLMUSE: A BIDS-app wrapper for NiChart DLMUSE
 message: >-
   If you use this software, please cite
-  (doi:).
+  (doi: 10.1016/j.neuroimage.2015.11.073).
 type: software
 authors:
   - given-names:
@@ -25,7 +25,8 @@ abstract: >-
   data easily and efficiently.
 
   NiChart_DLMUSE offers easy ICV (Intra-Cranial Volume) mask extraction, and brain 
-  segmentation into ROIs. This is achieved through the DLICV and DLMUSE methods. 
+  segmentation into ROIs. 
+  This is achieved through the DLICV (https://github.com/CBICA/DLICV) and DLMUSE (https://github.com/CBICA/DLMUSE) methods. 
   Intermediate step results are saved for easy access to the user.
 keywords:
   - DLMUSE
@@ -34,4 +35,4 @@ keywords:
   - Neuroimaging
 license: BSD-3-Clause
 version: 0.7.5
-date-released: '2025-01-08'
+date-released: '2025-05-28'

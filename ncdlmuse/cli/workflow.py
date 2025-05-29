@@ -138,10 +138,14 @@ def build_boilerplate(config_file, workflow):
 
     config.load(config_file)
     logs_path = config.execution.ncdlmuse_dir / 'logs'
+    logs_path.mkdir(parents=True, exist_ok=True)
     boilerplate = workflow.visit_desc()
     citation_files = {ext: logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')}
 
     if boilerplate:
+        # To please git-annex users and also to guarantee consistency
+        # among different renderings of the same file, first remove any
+        # existing one
         for citation_file in citation_files.values():
             try:
                 citation_file.unlink()
@@ -156,6 +160,7 @@ def build_boilerplate(config_file, workflow):
 
         from ncdlmuse.data import load as load_data
 
+        # Generate HTML file resolving citations
         cmd = [
             'pandoc',
             '-s',
@@ -175,6 +180,7 @@ def build_boilerplate(config_file, workflow):
         except (FileNotFoundError, CalledProcessError, TimeoutExpired):
             config.loggers.cli.warning('Could not generate CITATION.html file:\n%s', ' '.join(cmd))
 
+        # Generate LaTex file resolving citations
         cmd = [
             'pandoc',
             '-s',

@@ -87,14 +87,7 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
     # --- Basic Workflow Setup --- #
     workflow = Workflow(name=name)
     workflow.base_dir = str(work_dir)
-    workflow.__desc__ = """\
-Top-level workflow for NCDLMUSE processing.
 
-This workflow queries the BIDS dataset for T1w files based on configuration,
-iterates over subjects/sessions, instantiates a subject-specific workflow
-(:py:func:`~ncdlmuse.workflows.base.init_single_subject_wf`) for each T1w file,
-and manages overall execution settings.
-"""
     # Initialize default node configs
     for node in workflow._get_all_nodes():
         if not hasattr(node, 'config') or node.config is None:
@@ -396,26 +389,36 @@ def init_single_subject_wf(
     subject_id_str = _prefix(subject_id)
 
     # Workflow description (for reports)
-    workflow.__desc__ = f"""\
-NCDLMUSE: NiChart DLMUSE BIDS App version {config.environment.version}
+    workflow.__desc__ = """\
+## BIDS_NiChart_DLMUSE: BIDS App wrapper for NiChart_DLMUSE
 
-This workflow performs deep-learning based brain segmentation using NiChart_DLMUSE
-on T1-weighted (T1w) images for subject {subject_id_str}.
-The core of the processing involves the `NiChart_DLMUSE` tool to generate
-volumetric segmentations and related measurements.
+This workflow performs deep-learning based brain extraction and segmentation using NiChart_DLMUSE
+on T1-weighted (T1w) images.
+
+Brain extraction is done using [DLICV](https://github.com/CBICA/DLICV).
+
+Brain segmentation is done using [DLMUSE](https://github.com/CBICA/DLMUSE).
+
+This is based on the MUSE framework (MUlti-atlas region Segmentation utilizing Ensembles of
+registration algorithms and parameters, and locally optimal atlas selection) [@muse].
 
 The results include:
-* Volumetric segmentation images in T1w space.
-* Brain masks.
-* JSON files containing quantitative volume information.
-* HTML summary reports detailing processing steps and quality control metrics.
+
+* Segmented T1w in native space.
+* Brain mask.
+* JSON files containing ROIs' volumes.
+* HTML summary for visual quality control of DLICV and DLMUSE outputs.
 """
     workflow.__postdesc__ = f"""\
-For more details on the NCDLMUSE pipeline and methodologies, please consult the
-official documentation.
 
-NCDLMUSE is built using Nipype {config.environment.nipype_version}
-(@nipype1; @nipype2; RRID:SCR_002502).
+For more details on the pipeline and methodologies, please consult the
+[official documentation](https://github.com/CBICA/NiChart_DLMUSE).
+
+BIDS_NiChart_DLMUSE is built using *Nipype* version {config.environment.nipype_version}
+[@nipype; RRID:SCR_002502].
+
+## References
+
 """
 
     # Initialize default node configs

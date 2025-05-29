@@ -97,12 +97,6 @@ def init_dlmuse_wf(
     """
 
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
-Core NiChart_DLMUSE processing sub-workflow.
-
-This workflow wraps the :py:class:`~ncdlmuse.interfaces.ncdlmuse.NiChartDLMUSE`
-interface, responsible for segmentation and volume calculation on a T1w image.
-"""
 
     # Create input node (now needs t1w_file and timestamp)
     inputnode = pe.Node(niu.IdentityInterface(fields=['t1w_file', '_timestamp']), name='inputnode')
