@@ -395,9 +395,10 @@ NCDLMUSE: BIDS App wrapper for NiChart_DLMUSE
 This workflow performs deep-learning based brain extraction and segmentation using NiChart_DLMUSE
 on T1-weighted (T1w) images.
 The segmentation is based on the MUSE framework (MUlti-atlas region Segmentation utilizing
-Ensembles of registration algorithms and parameters, and locally optimal atlas selection; @muse).
+Ensembles of registration algorithms and parameters, and locally optimal atlas selection) [@muse].
 
 The results include:
+
 * Segmented T1w in native space.
 * Brain mask.
 * JSON files containing ROIs' volumes.
@@ -407,14 +408,15 @@ The results include:
 For more details on the pipeline and methodologies, please consult the
 official documentation at https://github.com/CBICA/NiChart_DLMUSE.
 
-NCDLMUSE is built using Nipype {config.environment.nipype_version}
-(@nipype1; @nipype2; RRID:SCR_002502).
+NCDLMUSE is built using *Nipype* version {config.environment.nipype_version}
+[@nipype; RRID:SCR_002502].
 
-References
-----------
-@muse: Doshi et al., (2016). MUSE: MUlti-atlas region Segmentation utilizing Ensembles of
-registration algorithms and parameters, and locally optimal atlas selection. NeuroImage, 127,
-186-195.
+## References
+
+Doshi, Jimit, Guray Erus, Yangming Ou, Bilwaj Gaonkar, and Christos Davatzikos.
+"MUSE: MUlti-atlas region Segmentation utilizing Ensembles of registration algorithms and
+parameters, and locally optimal atlas selection." NeuroImage 127 (2016): 186-195.
+https://doi.org/10.1016/j.neuroimage.2015.11.073
 """
 
     # Initialize default node configs
