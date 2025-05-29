@@ -880,7 +880,11 @@ def parse_args(args=None, namespace=None):
     # --- Save Final Configuration ---
     try:
         if config_file_path:  # Path determined above based on analysis_level; None for group
-            # For multiple subjects, create individual config files for each subject
+            # Always save the main config file for workflow builder
+            config.to_filename(config_file_path)
+            build_log.info(f'Main configuration saved to: {config_file_path}')
+
+            # For multiple subjects, ALSO create individual config files for each subject
             if config.execution.participant_label and len(config.execution.participant_label) > 1:
                 run_uuid = config.execution.run_uuid
                 for subj_label in config.execution.participant_label:
@@ -890,11 +894,9 @@ def parse_args(args=None, namespace=None):
                     subject_log_dir.mkdir(exist_ok=True, parents=True)
                     subject_config_path = subject_log_dir / 'ncdlmuse.toml'
                     config.to_filename(subject_config_path)
-                    build_log.info(f'Configuration saved for {subj_label}: {subject_config_path}')
-            else:
-                # Single subject or fallback
-                config.to_filename(config_file_path)
-                build_log.info(f'Final configuration saved to: {config_file_path}')
+                    build_log.info(
+                        f'Additional config saved for {subj_label}: {subject_config_path}'
+                    )
 
         elif config.execution.analysis_level == 'group':
             build_log.info('Group analysis: Skipping saving of configuration file.')
