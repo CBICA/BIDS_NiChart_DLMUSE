@@ -320,8 +320,25 @@ def main():
             p = Process(target=build_boilerplate, args=(str(config_file), workflow))
             p.start()
             p.join()
+
             if p.exitcode != 0:
-                config.loggers.cli.warning('Citation boilerplate generation failed.')
+                config.loggers.cli.warning(
+                    f'Citation boilerplate generation failed with exit code: {p.exitcode}'
+                )
+            else:
+                config.loggers.cli.info('Citation boilerplate generation completed successfully.')
+
+            # Check for debug log file to capture subprocess details
+            debug_log_path = config.execution.ncdlmuse_dir / 'logs' / 'boilerplate_debug.log'
+            if debug_log_path.exists():
+                try:
+                    debug_content = debug_log_path.read_text()
+                    config.loggers.cli.info(f'Boilerplate debug log contents:\n{debug_content}')
+                    # Clean up debug file
+                    debug_log_path.unlink()
+                except (OSError, PermissionError, UnicodeDecodeError) as e:
+                    config.loggers.cli.info(f'Could not read debug log: {e}')
+
     except (OSError, PermissionError, RuntimeError) as e:
         config.loggers.cli.warning(f'Citation boilerplate generation failed: {e}')
 
