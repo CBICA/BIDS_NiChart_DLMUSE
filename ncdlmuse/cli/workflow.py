@@ -218,7 +218,7 @@ def build_boilerplate(config_file, workflow):
                 str(load_data('boilerplate.bib')),
                 '--citeproc',
                 '--metadata',
-                'pagetitle="BIDS_NiChart_DLMUSE citation boilerplate"',
+                'pagetitle=BIDS_NiChart_DLMUSE citation boilerplate',
                 str(citation_files['md']),
                 '-o',
                 str(citation_files['html']),
