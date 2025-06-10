@@ -15,7 +15,7 @@ BIDS_NiChart_DLMUSE can be installed using pip:
 
 .. code-block:: bash
 
-    pip install ncdlmuse
+    pip install ncdlmuse==<version>
 
 Or using Docker:
 
