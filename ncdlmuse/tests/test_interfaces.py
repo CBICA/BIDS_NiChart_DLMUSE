@@ -151,6 +151,7 @@ def test_nichartdlmuse_input_validation(synthetic_t1w_file):
     ):
         NiChartDLMUSE(input_image=synthetic_t1w_file, device='invalid_device')
 
+
 def test_nichartdlmuse_output_spec():
     """Test that the output specification is correctly defined."""
     iface = NiChartDLMUSE()
