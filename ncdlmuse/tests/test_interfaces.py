@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import nibabel as nib
 import numpy as np
 import pytest
+from traits.api import TraitError
 
 from ncdlmuse.interfaces.ncdlmuse import NiChartDLMUSE
 
@@ -141,11 +142,14 @@ def test_nichartdlmuse_input_validation(synthetic_t1w_file):
     assert iface.inputs.input_image == synthetic_t1w_file
 
     # Invalid device should raise error during validation
-    iface = NiChartDLMUSE(input_image=synthetic_t1w_file, device='invalid_device')
-    with pytest.raises((ValueError, Exception)):
-        # Force validation
-        iface.inputs.trait_names()
-
+    with pytest.raises(
+        TraitError,
+        match=(
+            "The 'device' trait of a NiChartDLMUSEInputSpec instance must be "
+            "'cpu' or 'cuda' or 'mps'"
+        ),
+    ):
+        NiChartDLMUSE(input_image=synthetic_t1w_file, device='invalid_device')
 
 def test_nichartdlmuse_output_spec():
     """Test that the output specification is correctly defined."""
