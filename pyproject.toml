@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs", "nipreps-versions"]
+requires = ["hatchling>=1.25.0", "hatch-vcs>=0.4.0", "nipreps-versions>=0.1.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -13,33 +13,34 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Recognition",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 license = {file = "LICENSE.md"}
 requires-python = ">=3.10"
 dependencies = [
     'importlib_resources; python_version < "3.11"',
     "acres",
-    "indexed_gzip <= 1.10.1",
+    "indexed_gzip >= 1.10.0,< 1.11.0",
     "looseversion",
-    "networkx == 2.8.8",  # nipype needs networkx, but 3+ isn"t compatible with nipype 1.8.5
-    "nibabel <= 5.3.2",
-    "nilearn >= 0.11,< 0.13",
-    "nipype >= 1.8.5",
-    "niworkflows ~= 1.13.0",
-    "fmriprep >= 25.0.0",
-    "nireports >= 25.0.1",  # Required for report generation
-    "numpy >= 1.26",
+    "networkx >= 2.8.8,< 3.0.0",  # nipype needs networkx, but 3+ isn't compatible with nipype 1.8.5
+    "nibabel >= 5.0.0,< 6.0.0",
+    "nilearn >= 0.11.0,< 0.13.0",
+    "nipype >= 1.8.5,< 2.0.0",
+    "niworkflows >= 1.13.0,< 2.0.0",
+    "fmriprep >= 25.0.0,< 26.0.0",
+    "nireports >= 25.0.1,< 26.0.0",  # Required for report generation
+    "numpy >= 1.26.0,< 2.0.0",
     "packaging",
-    "pandas",
-    "psutil <= 7.0.0",
-    "pybids <= 0.19.0",
-    "requests",
-    "templateflow <= 25.0.3",
+    "pandas >= 2.0.0",
+    "psutil >= 5.9.0,< 6.0.0",
+    "pybids >= 0.19.0,< 0.20.0",
+    "requests >= 2.31.0",
+    "templateflow >= 24.2.0,< 26.0.0",
     "toml",
-    "torch==2.8.0",
-    "scipy",
-    "huggingface_hub",
-    "fmriprep",
+    "torch >= 2.8.0,< 3.0.0",
+    "scipy >= 1.11.0",
+    "huggingface_hub >= 0.20.0",
 ]
 dynamic = ["version"]
 

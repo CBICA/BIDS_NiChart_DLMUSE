@@ -334,6 +334,14 @@ def _build_parser():
         default=False,
         help='Clear the NiChart_DLMUSE model download cache before running.',
     )
+    g_dlmuse.add_argument(
+        '--save-all-NiChartDLMUSE-outputs',
+        '--save_all_NiChartDLMUSE_outputs',
+        dest='save_all_nichartdlmuse_outputs',
+        action='store_true',
+        default=False,
+        help='Save all intermediate NiChart_DLMUSE outputs (including raw outputs directory).',
+    )
 
     # --- Performance Options ---
     g_perfm = parser.add_argument_group('Options to handle performance')
@@ -577,6 +585,7 @@ def parse_args(args=None, namespace=None):
     config.workflow.dlmuse_all_in_gpu = cli_vars['all_in_gpu']
     config.workflow.dlmuse_disable_tta = cli_vars['disable_tta']
     config.workflow.dlmuse_clear_cache = cli_vars['clear_cache']
+    config.workflow.dlmuse_save_all_outputs = cli_vars['save_all_nichartdlmuse_outputs']
 
     # --- Resolve and Finalize Paths ---
     # BIDS Dir (required, checked by PathExists in parser)
