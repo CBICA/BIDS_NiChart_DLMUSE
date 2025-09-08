@@ -217,32 +217,38 @@ class NiChartDLMUSE(SimpleInterface):
             logger.error(f'An unexpected error occurred running NiChart_DLMUSE: {e}')
             raise
 
-        # --- 3. Check Raw Outputs and Copy to Final Location (cwd) --- #
-        raw_seg_path = raw_output_dir / f'{base_name}{_DLMUSE_SUFFIX}'
-        raw_mask_path = raw_output_dir / _S2_DLICV_SUBDIR / f'{base_name}{_DLICV_SUFFIX}'
-        raw_volumes_csv_path = raw_output_dir / f'{base_name}{_VOLUMES_CSV_SUFFIX}'
+        # --- 3. Locate Raw Outputs (robust to nested temp directories) --- #
+        # Search recursively within raw_output_dir for the expected filenames.
+        seg_candidates = list(raw_output_dir.rglob(f'{base_name}{_DLMUSE_SUFFIX}'))
+        mask_candidates = [
+            p
+            for p in raw_output_dir.rglob(f'{base_name}{_DLICV_SUFFIX}')
+            if p.parent.name == _S2_DLICV_SUBDIR
+        ]
+        vol_csv_candidates = list(raw_output_dir.rglob(f'{base_name}{_VOLUMES_CSV_SUFFIX}'))
 
-        # Check essential raw files exist
+        raw_seg_path = seg_candidates[0] if seg_candidates else None
+        raw_mask_path = mask_candidates[0] if mask_candidates else None
+        raw_volumes_csv_path = vol_csv_candidates[0] if vol_csv_candidates else None
+
         missing_raw_files = []
-        if not raw_seg_path.exists():
-            missing_raw_files.append(str(raw_seg_path))
-        if not raw_mask_path.exists():
-            missing_raw_files.append(str(raw_mask_path))
-            if not raw_mask_path.parent.exists():  # Log missing subdir as well
-                logger.warning(f'Raw mask subdirectory missing: {raw_mask_path.parent}')
-        if not raw_volumes_csv_path.exists():
-            missing_raw_files.append(str(raw_volumes_csv_path))
+        if raw_seg_path is None or not raw_seg_path.exists():
+            missing_raw_files.append(f'{base_name}{_DLMUSE_SUFFIX}')
+        if raw_mask_path is None or not raw_mask_path.exists():
+            missing_raw_files.append(f'{_S2_DLICV_SUBDIR}/{base_name}{_DLICV_SUFFIX}')
+        if raw_volumes_csv_path is None or not raw_volumes_csv_path.exists():
+            missing_raw_files.append(f'{base_name}{_VOLUMES_CSV_SUFFIX}')
 
         if missing_raw_files:
             error_msg = (
-                'NiChart_DLMUSE finished but essential raw output files are missing: '
-                + ', '.join(missing_raw_files)
+                'NiChart_DLMUSE finished but essential raw output files are missing under '
+                f'{raw_output_dir}: ' + ', '.join(missing_raw_files)
             )
             logger.error(error_msg)
             self._log_dir_contents(raw_output_dir, 'raw output')
             raise FileNotFoundError(error_msg)
         else:
-            logger.info('Essential raw output files found. Copying to final location.')
+            logger.info('Essential raw output files located. Copying to final location.')
 
         # Define final paths in cwd
         final_seg_path = self._cwd / raw_seg_path.name
@@ -265,7 +271,17 @@ class NiChartDLMUSE(SimpleInterface):
             logger.error(f'Error copying files from {raw_output_dir} to {self._cwd}: {e}')
             raise
 
-        # --- 4. Process Volumes CSV --- #
+        # --- 4. Optionally prune raw outputs when not keeping everything --- #
+        if not getattr(self.inputs, 'save_all_outputs', False):
+            try:
+                shutil.rmtree(raw_output_dir)
+                logger.info(
+                    f'Removed raw outputs directory {raw_output_dir} (save_all_outputs=False).'
+                )
+            except OSError as e:
+                logger.warning(f'Could not remove raw outputs directory {raw_output_dir}: {e}')
+
+        # --- 5. Process Volumes CSV --- #
         final_volumes_tsv_path = self._cwd / _PROCESSED_VOLUMES_TSV
         self._process_volumes(final_volumes_csv_path, final_volumes_tsv_path)
 

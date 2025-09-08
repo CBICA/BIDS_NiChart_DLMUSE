@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import time
+import warnings
 from collections import OrderedDict
 from importlib import resources as importlib_resources
 from pathlib import Path
@@ -19,8 +20,6 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.bids import BIDSDataGrabber
-
-# Add for plotting
 from niworkflows.interfaces.reportlets.masks import ROIsPlot
 
 from .. import config
