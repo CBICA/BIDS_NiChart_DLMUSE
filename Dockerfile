@@ -10,6 +10,9 @@ FROM pytorch/pytorch:${TORCH_VERSION}-cuda${CUDA_VERSION}-cudnn${CUDNN_VERSION}-
 ENV MKL_THREADING_LAYER=GNU
 ENV HUGGINGFACE_HUB_CACHE=/tmp/huggingface
 
+# Verify Python version compatibility
+RUN python --version
+
 # System deps
 RUN apt-get update && \
     apt-get install -y git ca-certificates wget && \
@@ -24,13 +27,20 @@ RUN apt-get update && \
 # Create and switch to the application dir
 WORKDIR /src/ncdlmuse
 
-# Now copy the rest of the source
+# Copy dependency files first for better caching
+COPY pyproject.toml ./
+COPY long_description.rst ./
+COPY LICENSE.md ./
+
+# Upgrade pip & install build dependencies
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir build hatchling hatch-vcs
+
+# Copy the rest of the source
 COPY . /src/ncdlmuse/
 
-# Upgrade pip & install the package (build-time deps will be pulled in)
-# use -e to update ncdlmuse repo without rebuilding the image
-RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir -e .
+# Install the package in editable mode
+RUN pip install --no-cache-dir -e .
 
 # Clone & install DL* from GitHub (install from the local folder)
 RUN rm -rf DLICV DLMUSE NiChart_DLMUSE && \
