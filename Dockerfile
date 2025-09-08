@@ -44,7 +44,6 @@ RUN pip install --no-cache-dir -e .
 
 # Clone & install CBICA
 RUN rm -rf DLICV DLMUSE NiChart_DLMUSE && \
-    pip install --no-cache-dir "numpy<2" "scipy<2" && \
     git clone https://github.com/CBICA/DLICV.git && \
     pip install --no-cache-dir ./DLICV && \
     git clone https://github.com/CBICA/DLMUSE.git && \
