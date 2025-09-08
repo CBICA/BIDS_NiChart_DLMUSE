@@ -34,7 +34,8 @@ COPY LICENSE.md ./
 
 # Upgrade pip & install build dependencies
 RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir build hatchling hatch-vcs
+ && pip install --no-cache-dir build hatchling hatch-vcs \
+ && pip install --no-cache-dir 'numpy<2'
 
 # Copy the rest of the source
 COPY . /src/ncdlmuse/
