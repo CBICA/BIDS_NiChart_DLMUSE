@@ -39,6 +39,7 @@ def init_dlmuse_wf(
     all_in_gpu=False,
     disable_tta=False,
     clear_cache=False,
+    save_all_outputs=False,
     _timestamp=None,
 ):
     """Initialize the core NiChart_DLMUSE sub-workflow.
@@ -76,6 +77,9 @@ def init_dlmuse_wf(
         Disable Test-Time Augmentation for inference (default: False).
     clear_cache : bool, optional
         Clear the model download cache before running (default: False).
+    save_all_outputs : bool, optional
+        Save all intermediate NiChart_DLMUSE outputs including raw outputs directory
+        (default: False).
     _timestamp : str or None, optional
         Timestamp for the workflow.
 
@@ -113,8 +117,12 @@ def init_dlmuse_wf(
         'all_in_gpu': all_in_gpu,
         'disable_tta': disable_tta,
         'clear_cache': clear_cache,
-        '_timestamp': _timestamp,
+        'save_all_outputs': save_all_outputs,
     }
+
+    # Only add _timestamp if it's not None
+    if _timestamp is not None:
+        dlmuse_args['_timestamp'] = _timestamp
 
     # Only add optional parameters if they're not None
     if model_folder is not None:

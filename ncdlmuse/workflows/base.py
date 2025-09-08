@@ -83,6 +83,7 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
     all_in_gpu = config.workflow.dlmuse_all_in_gpu
     disable_tta = config.workflow.dlmuse_disable_tta
     clear_cache = config.workflow.dlmuse_clear_cache
+    save_all_outputs = config.workflow.dlmuse_save_all_outputs
 
     # --- Basic Workflow Setup --- #
     workflow = Workflow(name=name)
@@ -245,6 +246,7 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
                     all_in_gpu=all_in_gpu,
                     disable_tta=disable_tta,
                     clear_cache=clear_cache,
+                    save_all_outputs=save_all_outputs,
                     name=f'single_subject_{node_prefix}_wf',
                 )
                 workflow.add_nodes([subject_wf])
@@ -281,6 +283,7 @@ def init_single_subject_wf(
     all_in_gpu=False,
     disable_tta=False,
     clear_cache=False,
+    save_all_outputs=False,
     name='single_subject_wf',
 ):
     """Initialize the NCDLMUSE processing pipeline for a single subject/session T1w.
@@ -491,6 +494,7 @@ BIDS_NiChart_DLMUSE is built using *Nipype* version {config.environment.nipype_v
             all_in_gpu=all_in_gpu,
             disable_tta=disable_tta,
             clear_cache=clear_cache,
+            save_all_outputs=save_all_outputs,
             **(({'model_folder': model_folder}) if model_folder else {}),
             **(
                 ({'derived_roi_mappings_file': derived_roi_mappings_file})

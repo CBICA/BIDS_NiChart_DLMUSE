@@ -13,33 +13,35 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Recognition",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 license = {file = "LICENSE.md"}
 requires-python = ">=3.10"
 dependencies = [
     'importlib_resources; python_version < "3.11"',
     "acres",
-    "indexed_gzip <= 1.10.1",
+    "indexed_gzip",
     "looseversion",
-    "networkx == 2.8.8",  # nipype needs networkx, but 3+ isn"t compatible with nipype 1.8.5
-    "nibabel <= 5.3.2",
-    "nilearn >= 0.11,< 0.13",
-    "nipype >= 1.8.5",
-    "niworkflows ~= 1.13.0",
-    "fmriprep >= 25.0.0",
-    "nireports >= 25.0.1",  # Required for report generation
-    "numpy >= 1.26",
+    "networkx",
+    "nibabel",
+    "nilearn",
+    "nipype",
+    "niworkflows",
+    "fmriprep",
+    "nireports",
+    "numpy",
     "packaging",
     "pandas",
-    "psutil <= 7.0.0",
-    "pybids <= 0.19.0",
+    "psutil",
+    "pybids",
     "requests",
-    "templateflow <= 25.0.3",
+    "templateflow",
     "toml",
-    "torch==2.8.0",
+    "torch>=2.3.1",
     "scipy",
     "huggingface_hub",
-    "fmriprep",
+    "SimpleITK"
 ]
 dynamic = ["version"]
 
@@ -55,17 +57,17 @@ doc = [
     "myst_parser",
     "nbsphinx",
     "packaging",
-    "pydot >= 1.2.3",
+    "pydot",
     "pydotplus",
-    "sphinx >= 6.2.1",
+    "sphinx",
     "sphinx-argparse",
     "sphinx-markdown-tables",
-    "sphinx_rtd_theme >= 1.2.2",
+    "sphinx_rtd_theme",
     "sphinxcontrib-apidoc",
     "sphinxcontrib-bibtex",
 ]
 dev = [
-    "ruff >= 0.11,< 0.13",
+    "ruff",
     "pre-commit",
 ]
 test = [

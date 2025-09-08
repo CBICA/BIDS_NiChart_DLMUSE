@@ -577,6 +577,8 @@ class workflow(_Config):
     """Disable Test-Time Augmentation for DLMUSE inference."""
     dlmuse_clear_cache = False
     """Clear the DLMUSE model download cache before running."""
+    dlmuse_save_all_outputs = False
+    """Save all intermediate NiChart_DLMUSE outputs (including raw outputs directory)."""
 
     @classmethod
     def init(cls):

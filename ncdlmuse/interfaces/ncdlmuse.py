@@ -49,6 +49,9 @@ class NiChartDLMUSEInputSpec(BaseInterfaceInputSpec):
     all_in_gpu = traits.Bool(False, usedefault=True, desc='Run all operations on GPU')
     disable_tta = traits.Bool(False, usedefault=True, desc='Disable Test-Time Augmentation')
     clear_cache = traits.Bool(False, usedefault=True, desc='Clear model cache')
+    save_all_outputs = traits.Bool(
+        False, usedefault=True, desc='Save all intermediate outputs including raw outputs dir'
+    )
     # Dummy input to force re-run by invalidating cache
     _timestamp = traits.Float(desc='Timestamp for cache invalidation')
     # Dummy input to enforce dependency on workdir clearing
@@ -64,6 +67,9 @@ class NiChartDLMUSEOutputSpec(TraitedSpec):
         desc='DLMUSE volumes TSV file (with renamed headers or original CSV as fallback)'
     )
     dlmuse_volumes_csv = File(desc='Original DLMUSE volumes CSV file (copied to output dir)')
+    raw_outputs_dir = traits.Directory(
+        desc='Directory containing all raw NiChart_DLMUSE outputs (when save_all_outputs=True)'
+    )
 
 
 class NiChartDLMUSE(SimpleInterface):
@@ -408,6 +414,19 @@ class NiChartDLMUSE(SimpleInterface):
                 f'[_list_outputs] Copied original CSV not found: {final_volumes_csv_path}'
             )
             # Don't assign if not found
+
+        # --- Assign raw outputs directory if save_all_outputs is enabled --- #
+        if getattr(self.inputs, 'save_all_outputs', False):
+            raw_output_dir = self._cwd / _RAW_OUT_SUBDIR
+            if raw_output_dir.exists() and raw_output_dir.is_dir():
+                outputs['raw_outputs_dir'] = str(raw_output_dir.resolve())
+                logger.info(
+                    f'[_list_outputs] Found raw outputs directory: {outputs["raw_outputs_dir"]}'
+                )
+            else:
+                logger.warning(
+                    f'[_list_outputs] Raw outputs directory not found: {raw_output_dir}'
+                )
 
         # Log final state before returning
         logger.info(f'[_list_outputs] Returning outputs: {outputs}')
