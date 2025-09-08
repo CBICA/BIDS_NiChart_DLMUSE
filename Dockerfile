@@ -42,15 +42,15 @@ COPY . /src/ncdlmuse/
 # Install the package in editable mode
 RUN pip install --no-cache-dir -e .
 
-# Clone & install DL* from GitHub with NumPy compatibility handling
+# Clone & install CBICA
 RUN rm -rf DLICV DLMUSE NiChart_DLMUSE && \
+    pip install --no-cache-dir "numpy<2" "scipy<2" && \
     git clone https://github.com/CBICA/DLICV.git && \
+    pip install --no-cache-dir ./DLICV && \
     git clone https://github.com/CBICA/DLMUSE.git && \
+    pip install --no-cache-dir ./DLMUSE && \
     git clone https://github.com/CBICA/NiChart_DLMUSE.git && \
-    # Install NiChart_DLMUSE ecosystem
-    pip install --no-cache-dir ./DLICV ./DLMUSE ./NiChart_DLMUSE && \
-    # Upgrade back to latest NumPy and SciPy
-    pip install --no-cache-dir --upgrade "numpy" "scipy"
+    pip install --no-cache-dir ./NiChart_DLMUSE
 
 # Create dummy I/O dirs and pre-cache models
 RUN mkdir -p /dummyinput /dummyoutput && \
