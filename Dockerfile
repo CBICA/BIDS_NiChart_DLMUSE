@@ -28,7 +28,7 @@ COPY long_description.rst ./
 COPY LICENSE.md ./
 
 # Install build dependencies
-RUN pip install --no-cache-dir setuptools build hatchling hatch-vcs nvidia-ml-py
+RUN pip install --no-cache-dir 'setuptools<81' build hatchling hatch-vcs nvidia-ml-py
 
 # Copy the rest of the source
 COPY . /src/ncdlmuse/
