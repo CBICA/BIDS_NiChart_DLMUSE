@@ -1203,9 +1203,12 @@ def _create_volumes_json_file(
 
                 # Get driver version using nvidia-smi
                 try:
+                    nvidia_smi_path = shutil.which('nvidia-smi')
+                    if nvidia_smi_path is None:
+                        raise FileNotFoundError('nvidia-smi not found in PATH')
                     result = subprocess.run(
                         [
-                            'nvidia-smi',
+                            nvidia_smi_path,
                             '--query-gpu=driver_version',
                             '--format=csv,noheader,nounits',
                         ],
@@ -1216,14 +1219,11 @@ def _create_volumes_json_file(
                     )
                     gpu_driver_version = result.stdout.strip()
                 except (FileNotFoundError, subprocess.SubprocessError):
-                    LOGGER.warning(
-                        'nvidia-smi not available, cannot get GPU driver version'
-                    )
+                    LOGGER.warning('nvidia-smi not available, cannot get GPU driver version')
                     gpu_driver_version = 'N/A'
 
                 LOGGER.info(
-                    f'PyTorch: {torch_version}, CUDA: {cuda_version}, '
-                    f'cuDNN: {cudnn_version}'
+                    f'PyTorch: {torch_version}, CUDA: {cuda_version}, cuDNN: {cudnn_version}'
                 )
                 LOGGER.info(f'GPU Model: {gpu_model}, Driver: {gpu_driver_version}')
             except (OSError, RuntimeError) as gpu_e:
