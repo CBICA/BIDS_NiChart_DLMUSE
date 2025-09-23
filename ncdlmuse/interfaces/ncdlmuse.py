@@ -20,8 +20,6 @@ from .. import config
 
 # Use standardized logger
 logger = config.loggers.getLogger('ncdlmuse.interfaces.ncdlmuse')
-# Define _logger for _list_outputs
-_logger = config.loggers.getLogger('ncdlmuse.interfaces.ncdlmuse')
 
 # --- Constants for filenames and directories ---
 _RAW_OUT_SUBDIR = 'ncdlmuse_raw_out'
@@ -271,35 +269,27 @@ class NiChartDLMUSE(SimpleInterface):
             logger.error(f'Error copying files from {raw_output_dir} to {self._cwd}: {e}')
             raise
 
-        # --- 4. Preserve temp_working_dir if save_all_outputs is True --- #
-        if getattr(self.inputs, 'save_all_outputs', False):
-            # Look for temp_working_dir in the raw output directory
-            temp_working_dir = raw_output_dir / 'temp_working_dir'
-            if temp_working_dir.exists():
-                # Copy temp_working_dir to a preserved location
-                preserved_temp_dir = self._cwd / 'preserved_temp_working_dir'
-                try:
-                    if preserved_temp_dir.exists():
-                        shutil.rmtree(preserved_temp_dir)
-                    shutil.copytree(temp_working_dir, preserved_temp_dir)
-                    logger.info(
-                        f'Preserved temp_working_dir to {preserved_temp_dir} '
-                        f'(save_all_outputs=True).'
-                    )
-                except OSError as e:
-                    logger.warning(f'Could not preserve temp_working_dir: {e}')
-            else:
-                logger.warning(f'temp_working_dir not found at {temp_working_dir}')
+        # --- 4. Keep raw outputs and temp_working_dir when save_all_outputs is True --- #
+        # Intentionally do nothing here. We never remove or relocate NiChart_DLMUSE raw outputs
+        # (including temp_working_dir) when save_all_outputs=True.
 
-        # --- 5. Optionally prune raw outputs when not keeping everything --- #
+        # --- 5. Optionally prune temporary working directory when not keeping everything --- #
+        # If not saving all outputs, remove ONLY the temp_working_dir, keep other raw outputs.
         if not getattr(self.inputs, 'save_all_outputs', False):
+            temp_working_dir = raw_output_dir / 'temp_working_dir'
             try:
-                shutil.rmtree(raw_output_dir)
-                logger.info(
-                    f'Removed raw outputs directory {raw_output_dir} (save_all_outputs=False).'
-                )
+                if temp_working_dir.exists():
+                    shutil.rmtree(temp_working_dir)
+                    logger.info(
+                        f'Removed temp working directory {temp_working_dir} '
+                        f'(save_all_outputs=False).'
+                    )
+                else:
+                    logger.info(
+                        f'temp_working_dir not found at {temp_working_dir}, nothing to remove.'
+                    )
             except OSError as e:
-                logger.warning(f'Could not remove raw outputs directory {raw_output_dir}: {e}')
+                logger.warning(f'Could not remove temp working directory {temp_working_dir}: {e}')
 
         # --- 6. Process Volumes CSV --- #
         final_volumes_tsv_path = self._cwd / _PROCESSED_VOLUMES_TSV

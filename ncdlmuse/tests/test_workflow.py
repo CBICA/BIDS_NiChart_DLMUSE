@@ -155,8 +155,8 @@ def test_gpu_hardware_detection():
 
             # Mock torch version info
             with (
-                patch('torch.__version__', '2.1.0'),
-                patch('torch.version.cuda', '11.8'),
+                patch('torch.__version__', '2.3.1'),
+                patch('torch.version.cuda', '12.1'),
                 patch('torch.backends.cudnn.version', return_value=8902),
             ):
                 # Create a temporary output file
@@ -211,7 +211,7 @@ def test_gpu_hardware_detection_cpu():
         # Test with CUDA not available
         with (
             patch('torch.cuda.is_available', return_value=False),
-            patch('torch.__version__', '2.1.0'),
+            patch('torch.__version__', '2.3.1'),
         ):
             # Create a temporary output file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as json_f:

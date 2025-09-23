@@ -33,8 +33,8 @@ RUN pip install --no-cache-dir setuptools build hatchling hatch-vcs nvidia-ml-py
 # Copy the rest of the source
 COPY . /src/ncdlmuse/
 
-# Install the package in editable mode
-RUN pip install --no-cache-dir -e .
+# Install the package in editable mode (with PyTorch CUDA index)
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu121 -e .
 
 # Clone & install CBICA packages and pre-cache models
 RUN rm -rf DLICV DLMUSE NiChart_DLMUSE && \
