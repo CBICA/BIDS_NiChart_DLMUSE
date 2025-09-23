@@ -271,7 +271,27 @@ class NiChartDLMUSE(SimpleInterface):
             logger.error(f'Error copying files from {raw_output_dir} to {self._cwd}: {e}')
             raise
 
-        # --- 4. Optionally prune raw outputs when not keeping everything --- #
+        # --- 4. Preserve temp_working_dir if save_all_outputs is True --- #
+        if getattr(self.inputs, 'save_all_outputs', False):
+            # Look for temp_working_dir in the raw output directory
+            temp_working_dir = raw_output_dir / 'temp_working_dir'
+            if temp_working_dir.exists():
+                # Copy temp_working_dir to a preserved location
+                preserved_temp_dir = self._cwd / 'preserved_temp_working_dir'
+                try:
+                    if preserved_temp_dir.exists():
+                        shutil.rmtree(preserved_temp_dir)
+                    shutil.copytree(temp_working_dir, preserved_temp_dir)
+                    logger.info(
+                        f'Preserved temp_working_dir to {preserved_temp_dir} '
+                        f'(save_all_outputs=True).'
+                    )
+                except OSError as e:
+                    logger.warning(f'Could not preserve temp_working_dir: {e}')
+            else:
+                logger.warning(f'temp_working_dir not found at {temp_working_dir}')
+
+        # --- 5. Optionally prune raw outputs when not keeping everything --- #
         if not getattr(self.inputs, 'save_all_outputs', False):
             try:
                 shutil.rmtree(raw_output_dir)
@@ -281,7 +301,7 @@ class NiChartDLMUSE(SimpleInterface):
             except OSError as e:
                 logger.warning(f'Could not remove raw outputs directory {raw_output_dir}: {e}')
 
-        # --- 5. Process Volumes CSV --- #
+        # --- 6. Process Volumes CSV --- #
         final_volumes_tsv_path = self._cwd / _PROCESSED_VOLUMES_TSV
         self._process_volumes(final_volumes_csv_path, final_volumes_tsv_path)
 

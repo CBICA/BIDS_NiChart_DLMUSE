@@ -35,8 +35,21 @@ from .. import data
 
 # Filter warnings that are visible datetime import during process execution
 # See https://github.com/nipreps/fmriprep/issues/2871
+# Existing filters
 warnings.filterwarnings('ignore', message='.*already loaded.*packaging.*')
 warnings.filterwarnings('ignore', message='.*is non-raw schema type.*')
+
+# Silence third-party deprecation warnings we cannot control at runtime
+warnings.filterwarnings(
+    'default',
+    category=UserWarning,
+    message=r'.*pkg_resources is deprecated as an API.*',
+)
+warnings.filterwarnings(
+    'default',
+    category=FutureWarning,
+    message=r'.*The pynvml package is deprecated\. Please install nvidia-ml-py instead.*',
+)
 
 
 def main():

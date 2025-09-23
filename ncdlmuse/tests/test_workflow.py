@@ -1,6 +1,6 @@
 """Tests for ncdlmuse workflow construction."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from nipype.pipeline.engine import Workflow
@@ -126,3 +126,118 @@ def test_init_ncdlmuse_wf_param_passing(
 
     finally:
         config.execution.layout = None
+
+
+def test_gpu_hardware_detection():
+    """Test GPU hardware detection in provenance collection."""
+    from ncdlmuse.workflows.base import _create_volumes_json_file
+    import tempfile
+    import json
+    from pathlib import Path
+
+    # Create a temporary CSV file for testing
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        f.write('ROI_ID,Volume\n1,1000\n2,2000\n')
+        temp_csv = f.name
+
+    try:
+        # Test with mocked GPU detection
+        with patch('torch.cuda.is_available', return_value=True), \
+             patch('torch.cuda.get_device_name', return_value='NVIDIA A100-SXM4-40GB'), \
+             patch('subprocess.run') as mock_subprocess:
+            
+            # Mock nvidia-smi output
+            mock_result = MagicMock()
+            mock_result.stdout = '525.85.12\n'
+            mock_subprocess.return_value = mock_result
+            
+            # Mock torch version info
+            with patch('torch.__version__', '2.1.0'), \
+                 patch('torch.version.cuda', '11.8'), \
+                 patch('torch.backends.cudnn.version', return_value=8902):
+                
+                # Create a temporary output file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as json_f:
+                    temp_json = json_f.name
+                
+                try:
+                    # Call the function
+                    result_path = _create_volumes_json_file(
+                        volumes_csv=temp_csv,
+                        source_t1w_json_path=None,
+                        device_used='cuda',
+                        roi_list_tsv=None,
+                        source_file=None
+                    )
+                    
+                    # Read the result and check GPU info
+                    with open(result_path, 'r') as f:
+                        result_data = json.load(f)
+                    
+                    provenance = result_data.get('provenance', {})
+                    assert 'gpu_model' in provenance
+                    assert 'gpu_driver_version' in provenance
+                    assert provenance['gpu_model'] == 'NVIDIA A100-SXM4-40GB'
+                    assert provenance['gpu_driver_version'] == '525.85.12'
+                    assert provenance['device_used'] == 'cuda'
+                    
+                finally:
+                    # Clean up temporary files
+                    Path(temp_json).unlink(missing_ok=True)
+                    Path(result_path).unlink(missing_ok=True)
+                    
+    finally:
+        # Clean up temporary CSV
+        Path(temp_csv).unlink(missing_ok=True)
+
+
+def test_gpu_hardware_detection_cpu():
+    """Test GPU hardware detection when CUDA is not available."""
+    from ncdlmuse.workflows.base import _create_volumes_json_file
+    import tempfile
+    import json
+    from pathlib import Path
+
+    # Create a temporary CSV file for testing
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        f.write('ROI_ID,Volume\n1,1000\n2,2000\n')
+        temp_csv = f.name
+
+    try:
+        # Test with CUDA not available
+        with patch('torch.cuda.is_available', return_value=False), \
+             patch('torch.__version__', '2.1.0'):
+            
+            # Create a temporary output file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as json_f:
+                temp_json = json_f.name
+            
+            try:
+                # Call the function
+                result_path = _create_volumes_json_file(
+                    volumes_csv=temp_csv,
+                    source_t1w_json_path=None,
+                    device_used='cpu',
+                    roi_list_tsv=None,
+                    source_file=None
+                )
+                
+                # Read the result and check GPU info
+                with open(result_path, 'r') as f:
+                    result_data = json.load(f)
+                
+                provenance = result_data.get('provenance', {})
+                assert 'gpu_model' in provenance
+                assert 'gpu_driver_version' in provenance
+                assert provenance['gpu_model'] == 'N/A'
+                assert provenance['gpu_driver_version'] == 'N/A'
+                assert provenance['device_used'] == 'cpu'
+                
+            finally:
+                # Clean up temporary files
+                Path(temp_json).unlink(missing_ok=True)
+                Path(result_path).unlink(missing_ok=True)
+                
+    finally:
+        # Clean up temporary CSV
+        Path(temp_csv).unlink(missing_ok=True)

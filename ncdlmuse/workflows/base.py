@@ -1188,18 +1188,58 @@ def _create_volumes_json_file(
     torch_version = None
     cuda_version = None
     cudnn_version = None
+    gpu_model = None
+    gpu_driver_version = None
     try:
         torch_version = torch.__version__
         if torch.cuda.is_available():
             cuda_version = torch.version.cuda
             cudnn_version = torch.backends.cudnn.version()
-            LOGGER.info(f'PyTorch: {torch_version}, CUDA: {cuda_version}, cuDNN: {cudnn_version}')
+
+            # Get GPU model and driver information
+            try:
+                # Get GPU model using torch
+                gpu_model = torch.cuda.get_device_name(0)  # Get first GPU
+
+                # Get driver version using nvidia-smi
+                try:
+                    result = subprocess.run(
+                        [
+                            'nvidia-smi',
+                            '--query-gpu=driver_version',
+                            '--format=csv,noheader,nounits',
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                        encoding='utf-8',
+                    )
+                    gpu_driver_version = result.stdout.strip()
+                except (FileNotFoundError, subprocess.SubprocessError):
+                    LOGGER.warning(
+                        'nvidia-smi not available, cannot get GPU driver version'
+                    )
+                    gpu_driver_version = 'N/A'
+
+                LOGGER.info(
+                    f'PyTorch: {torch_version}, CUDA: {cuda_version}, '
+                    f'cuDNN: {cudnn_version}'
+                )
+                LOGGER.info(f'GPU Model: {gpu_model}, Driver: {gpu_driver_version}')
+            except (OSError, RuntimeError) as gpu_e:
+                LOGGER.warning(f'Error getting GPU hardware info: {gpu_e}')
+                gpu_model = 'N/A'
+                gpu_driver_version = 'N/A'
         else:
             LOGGER.info(f'PyTorch: {torch_version}, CUDA: Not available.')
             cuda_version = 'N/A'
             cudnn_version = 'N/A'
+            gpu_model = 'N/A'
+            gpu_driver_version = 'N/A'
     except (OSError, subprocess.SubprocessError) as e:
         LOGGER.warning(f'Error getting Torch/CUDA/cuDNN versions: {e}')
+        gpu_model = 'N/A'
+        gpu_driver_version = 'N/A'
 
     provenance = {
         'bids_ncdlmuse_version': bids_ncdlmuse_version,
@@ -1208,6 +1248,8 @@ def _create_volumes_json_file(
         'cuda_version': cuda_version,
         'cudnn_version': cudnn_version,
         'device_used': device_used,
+        'gpu_model': gpu_model,
+        'gpu_driver_version': gpu_driver_version,
     }
 
     # Assemble final dictionary

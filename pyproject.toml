@@ -38,7 +38,7 @@ dependencies = [
     "requests",
     "templateflow <= 25.0.3",
     "toml",
-    "torch>=2.3.1",
+    "torch==2.3.1",
     "scipy",
     "huggingface_hub",
     "SimpleITK"
