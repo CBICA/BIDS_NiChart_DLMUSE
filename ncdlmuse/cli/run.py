@@ -35,6 +35,7 @@ from .. import data
 
 # Filter warnings that are visible datetime import during process execution
 # See https://github.com/nipreps/fmriprep/issues/2871
+# Existing filters
 warnings.filterwarnings('ignore', message='.*already loaded.*packaging.*')
 warnings.filterwarnings('ignore', message='.*is non-raw schema type.*')
 

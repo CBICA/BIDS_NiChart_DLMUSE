@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import time
+import warnings
 from collections import OrderedDict
 from importlib import resources as importlib_resources
 from pathlib import Path
@@ -19,8 +20,6 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.bids import BIDSDataGrabber
-
-# Add for plotting
 from niworkflows.interfaces.reportlets.masks import ROIsPlot
 
 from .. import config
@@ -84,6 +83,7 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
     disable_tta = config.workflow.dlmuse_disable_tta
     clear_cache = config.workflow.dlmuse_clear_cache
     save_all_outputs = config.workflow.dlmuse_save_all_outputs
+    refaced_data = config.workflow.dlmuse_refaced_data
 
     # --- Basic Workflow Setup --- #
     workflow = Workflow(name=name)
@@ -247,6 +247,7 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
                     disable_tta=disable_tta,
                     clear_cache=clear_cache,
                     save_all_outputs=save_all_outputs,
+                    refaced_data=refaced_data,
                     name=f'single_subject_{node_prefix}_wf',
                 )
                 workflow.add_nodes([subject_wf])
@@ -284,6 +285,7 @@ def init_single_subject_wf(
     disable_tta=False,
     clear_cache=False,
     save_all_outputs=False,
+    refaced_data=False,
     name='single_subject_wf',
 ):
     """Initialize the NCDLMUSE processing pipeline for a single subject/session T1w.
@@ -495,6 +497,7 @@ BIDS_NiChart_DLMUSE is built using *Nipype* version {config.environment.nipype_v
             disable_tta=disable_tta,
             clear_cache=clear_cache,
             save_all_outputs=save_all_outputs,
+            refaced_data=refaced_data,
             **(({'model_folder': model_folder}) if model_folder else {}),
             **(
                 ({'derived_roi_mappings_file': derived_roi_mappings_file})
@@ -1185,18 +1188,58 @@ def _create_volumes_json_file(
     torch_version = None
     cuda_version = None
     cudnn_version = None
+    gpu_model = None
+    gpu_driver_version = None
     try:
         torch_version = torch.__version__
         if torch.cuda.is_available():
             cuda_version = torch.version.cuda
             cudnn_version = torch.backends.cudnn.version()
-            LOGGER.info(f'PyTorch: {torch_version}, CUDA: {cuda_version}, cuDNN: {cudnn_version}')
+
+            # Get GPU model and driver information
+            try:
+                # Get GPU model using torch
+                gpu_model = torch.cuda.get_device_name(0)  # Get first GPU
+
+                # Get driver version using nvidia-smi
+                try:
+                    nvidia_smi_path = shutil.which('nvidia-smi')
+                    if nvidia_smi_path is None:
+                        raise FileNotFoundError('nvidia-smi not found in PATH')
+                    result = subprocess.run(
+                        [
+                            nvidia_smi_path,
+                            '--query-gpu=driver_version',
+                            '--format=csv,noheader,nounits',
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                        encoding='utf-8',
+                    )
+                    gpu_driver_version = result.stdout.strip()
+                except (FileNotFoundError, subprocess.SubprocessError):
+                    LOGGER.warning('nvidia-smi not available, cannot get GPU driver version')
+                    gpu_driver_version = 'N/A'
+
+                LOGGER.info(
+                    f'PyTorch: {torch_version}, CUDA: {cuda_version}, cuDNN: {cudnn_version}'
+                )
+                LOGGER.info(f'GPU Model: {gpu_model}, Driver: {gpu_driver_version}')
+            except (OSError, RuntimeError) as gpu_e:
+                LOGGER.warning(f'Error getting GPU hardware info: {gpu_e}')
+                gpu_model = 'N/A'
+                gpu_driver_version = 'N/A'
         else:
             LOGGER.info(f'PyTorch: {torch_version}, CUDA: Not available.')
             cuda_version = 'N/A'
             cudnn_version = 'N/A'
+            gpu_model = 'N/A'
+            gpu_driver_version = 'N/A'
     except (OSError, subprocess.SubprocessError) as e:
         LOGGER.warning(f'Error getting Torch/CUDA/cuDNN versions: {e}')
+        gpu_model = 'N/A'
+        gpu_driver_version = 'N/A'
 
     provenance = {
         'bids_ncdlmuse_version': bids_ncdlmuse_version,
@@ -1205,6 +1248,8 @@ def _create_volumes_json_file(
         'cuda_version': cuda_version,
         'cudnn_version': cudnn_version,
         'device_used': device_used,
+        'gpu_model': gpu_model,
+        'gpu_driver_version': gpu_driver_version,
     }
 
     # Assemble final dictionary

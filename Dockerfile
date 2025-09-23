@@ -7,22 +7,17 @@ ARG CUDNN_VERSION="8"
 FROM pytorch/pytorch:${TORCH_VERSION}-cuda${CUDA_VERSION}-cudnn${CUDNN_VERSION}-runtime
 
 # Environment
-ENV MKL_THREADING_LAYER=GNU
-ENV HUGGINGFACE_HUB_CACHE=/tmp/huggingface
+ENV MKL_THREADING_LAYER=GNU \
+    HUGGINGFACE_HUB_CACHE=/tmp/huggingface
 
-# Verify Python version compatibility
-RUN python --version
-
-# System deps
+# Install system dependencies
 RUN apt-get update && \
-    apt-get install -y git ca-certificates wget && \
+    apt-get install -y --no-install-recommends git ca-certificates wget && \
     update-ca-certificates && \
-    # Install newer pandoc with --citeproc support (2.11+)
     wget -O pandoc.deb https://github.com/jgm/pandoc/releases/download/3.1.13/pandoc-3.1.13-1-amd64.deb && \
     dpkg -i pandoc.deb && \
     rm pandoc.deb && \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /tmp/huggingface
+    rm -rf /var/lib/apt/lists/*
 
 # Create and switch to the application dir
 WORKDIR /src/ncdlmuse
@@ -32,32 +27,27 @@ COPY pyproject.toml ./
 COPY long_description.rst ./
 COPY LICENSE.md ./
 
-# Upgrade pip & install build dependencies
-RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir build hatchling hatch-vcs
+# Install build dependencies
+RUN pip install --no-cache-dir 'setuptools<81' build hatchling hatch-vcs nvidia-ml-py
 
 # Copy the rest of the source
 COPY . /src/ncdlmuse/
 
-# Install the package in editable mode
-RUN pip install --no-cache-dir -e .
+# Install the package in editable mode (with PyTorch CUDA index)
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu121 -e .
 
-# Clone & install DL* from GitHub (install from the local folder)
+# Clone & install CBICA packages and pre-cache models
 RUN rm -rf DLICV DLMUSE NiChart_DLMUSE && \
-    git clone https://github.com/CBICA/DLICV.git && \
+    git clone --depth 1 https://github.com/CBICA/DLICV.git && \
     pip install --no-cache-dir ./DLICV && \
-    git clone https://github.com/CBICA/DLMUSE.git && \
+    git clone --depth 1 https://github.com/CBICA/DLMUSE.git && \
     pip install --no-cache-dir ./DLMUSE && \
-    git clone https://github.com/CBICA/NiChart_DLMUSE.git && \
-    pip install --no-cache-dir ./NiChart_DLMUSE
-
-# Create dummy I/O dirs and pre-cache models
-RUN mkdir -p /dummyinput /dummyoutput && \
+    git clone --depth 1 https://github.com/CBICA/NiChart_DLMUSE.git && \
+    pip install --no-cache-dir ./NiChart_DLMUSE && \
+    mkdir -p /dummyinput /dummyoutput && \
     DLICV -i /dummyinput -o /dummyoutput && \
-    DLMUSE -i /dummyinput -o /dummyoutput
-
-# Runtime dir
-WORKDIR /tmp/
+    DLMUSE -i /dummyinput -o /dummyoutput && \
+    rm -rf DLICV DLMUSE NiChart_DLMUSE
 
 # Entrypoint
 ENTRYPOINT ["/opt/conda/bin/ncdlmuse"]
