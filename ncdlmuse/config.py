@@ -579,6 +579,8 @@ class workflow(_Config):
     """Clear the DLMUSE model download cache before running."""
     dlmuse_save_all_outputs = False
     """Save all intermediate NiChart_DLMUSE outputs (including raw outputs directory)."""
+    dlmuse_refaced_data = False
+    """Refine DLICV mask by keeping only the largest connected component (for refaced data)."""
 
     @classmethod
     def init(cls):

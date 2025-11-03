@@ -129,9 +129,8 @@ def test_init_ncdlmuse_wf_param_passing(
 
 
 def test_gpu_hardware_detection():
-    """Test GPU hardware detection and compute node in provenance collection."""
+    """Test GPU hardware detection in provenance collection."""
     import json
-    import os
     import tempfile
     from pathlib import Path
 
@@ -146,9 +145,8 @@ def test_gpu_hardware_detection():
         # Test with mocked GPU detection
         with (
             patch('torch.cuda.is_available', return_value=True),
-            patch('shutil.which', return_value='/usr/bin/nvidia-smi'),  # Mock nvidia-smi path
+            patch('torch.cuda.get_device_name', return_value='NVIDIA A100-SXM4-40GB'),
             patch('subprocess.run') as mock_subprocess,
-            patch.dict(os.environ, {'SLURMD_NODENAME': '211affn012'}),
         ):
             # Mock nvidia-smi output
             mock_result = MagicMock()
@@ -180,9 +178,9 @@ def test_gpu_hardware_detection():
                         result_data = json.load(f)
 
                     provenance = result_data.get('provenance', {})
-                    assert 'compute_node' in provenance
+                    assert 'gpu_model' in provenance
                     assert 'gpu_driver_version' in provenance
-                    assert provenance['compute_node'] == '211affn012'
+                    assert provenance['gpu_model'] == 'NVIDIA A100-SXM4-40GB'
                     assert provenance['gpu_driver_version'] == '525.85.12'
                     assert provenance['device_used'] == 'cuda'
 
@@ -199,7 +197,6 @@ def test_gpu_hardware_detection():
 def test_gpu_hardware_detection_cpu():
     """Test GPU hardware detection when CUDA is not available."""
     import json
-    import os
     import tempfile
     from pathlib import Path
 
@@ -215,7 +212,6 @@ def test_gpu_hardware_detection_cpu():
         with (
             patch('torch.cuda.is_available', return_value=False),
             patch('torch.__version__', '2.3.1'),
-            patch.dict(os.environ, {}, clear=False),  # Clear SLURM vars if they exist
         ):
             # Create a temporary output file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as json_f:
@@ -236,9 +232,9 @@ def test_gpu_hardware_detection_cpu():
                     result_data = json.load(f)
 
                 provenance = result_data.get('provenance', {})
-                assert 'compute_node' in provenance
+                assert 'gpu_model' in provenance
                 assert 'gpu_driver_version' in provenance
-                assert provenance['compute_node'] == 'N/A'
+                assert provenance['gpu_model'] == 'N/A'
                 assert provenance['gpu_driver_version'] == 'N/A'
                 assert provenance['device_used'] == 'cpu'
 
@@ -246,69 +242,6 @@ def test_gpu_hardware_detection_cpu():
                 # Clean up temporary files
                 Path(temp_json).unlink(missing_ok=True)
                 Path(result_path).unlink(missing_ok=True)
-
-    finally:
-        # Clean up temporary CSV
-        Path(temp_csv).unlink(missing_ok=True)
-
-
-def test_compute_node_slurm_nodelist():
-    """Test compute node detection using SLURM_NODELIST when SLURMD_NODENAME is not available."""
-    import json
-    import os
-    import tempfile
-    from pathlib import Path
-
-    from ncdlmuse.workflows.base import _create_volumes_json_file
-
-    # Create a temporary CSV file for testing
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-        f.write('ROI_ID,Volume\n1,1000\n2,2000\n')
-        temp_csv = f.name
-
-    try:
-        # Test with SLURM_NODELIST but no SLURMD_NODENAME
-        env_backup = os.environ.copy()
-        try:
-            # Set SLURM_NODELIST and remove SLURMD_NODENAME if it exists
-            if 'SLURMD_NODENAME' in os.environ:
-                del os.environ['SLURMD_NODENAME']
-            os.environ['SLURM_NODELIST'] = 'node[001-005]'
-
-            with (
-                patch('torch.cuda.is_available', return_value=False),
-                patch('torch.__version__', '2.3.1'),
-            ):
-                # Create a temporary output file
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as json_f:
-                    temp_json = json_f.name
-
-                try:
-                    # Call the function
-                    result_path = _create_volumes_json_file(
-                        volumes_csv=temp_csv,
-                        source_t1w_json_path=None,
-                        device_used='cpu',
-                        roi_list_tsv=None,
-                        source_file=None,
-                    )
-
-                    # Read the result and check compute node info
-                    with open(result_path) as f:
-                        result_data = json.load(f)
-
-                    provenance = result_data.get('provenance', {})
-                    assert 'compute_node' in provenance
-                    assert provenance['compute_node'] == 'node[001-005]'
-
-                finally:
-                    # Clean up temporary files
-                    Path(temp_json).unlink(missing_ok=True)
-                    Path(result_path).unlink(missing_ok=True)
-        finally:
-            # Restore environment
-            os.environ.clear()
-            os.environ.update(env_backup)
 
     finally:
         # Clean up temporary CSV

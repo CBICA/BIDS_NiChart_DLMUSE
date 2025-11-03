@@ -83,6 +83,7 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
     disable_tta = config.workflow.dlmuse_disable_tta
     clear_cache = config.workflow.dlmuse_clear_cache
     save_all_outputs = config.workflow.dlmuse_save_all_outputs
+    refaced_data = config.workflow.dlmuse_refaced_data
 
     # --- Basic Workflow Setup --- #
     workflow = Workflow(name=name)
@@ -246,6 +247,7 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
                     disable_tta=disable_tta,
                     clear_cache=clear_cache,
                     save_all_outputs=save_all_outputs,
+                    refaced_data=refaced_data,
                     name=f'single_subject_{node_prefix}_wf',
                 )
                 workflow.add_nodes([subject_wf])
@@ -283,6 +285,7 @@ def init_single_subject_wf(
     disable_tta=False,
     clear_cache=False,
     save_all_outputs=False,
+    refaced_data=False,
     name='single_subject_wf',
 ):
     """Initialize the NCDLMUSE processing pipeline for a single subject/session T1w.
@@ -496,6 +499,7 @@ BIDS_NiChart_DLMUSE is built using *Nipype* version {config.environment.nipype_v
             disable_tta=disable_tta,
             clear_cache=clear_cache,
             save_all_outputs=save_all_outputs,
+            refaced_data=refaced_data,
             **(({'model_folder': model_folder}) if model_folder else {}),
             **(
                 ({'derived_roi_mappings_file': derived_roi_mappings_file})
@@ -1187,6 +1191,7 @@ def _create_volumes_json_file(
     cuda_version = None
     cudnn_version = None
     compute_node = None
+
     gpu_driver_version = None
     try:
         torch_version = torch.__version__
