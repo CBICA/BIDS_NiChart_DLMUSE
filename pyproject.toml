@@ -30,7 +30,7 @@ dependencies = [
     "niworkflows >= 1.13,< 1.15",
     "fmriprep >= 25.0.0",
     "nireports >= 25.0.1",  # Required for report generation
-    "numpy >= 1.26,<2",
+    "numpy >= 1.26,< 3",
     "packaging",
     "pandas",
     "pybids <= 0.21.0",
