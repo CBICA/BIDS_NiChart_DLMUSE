@@ -129,8 +129,9 @@ def test_init_ncdlmuse_wf_param_passing(
 
 
 def test_gpu_hardware_detection():
-    """Test GPU hardware detection in provenance collection."""
+    """Test GPU hardware detection and compute node in provenance collection."""
     import json
+    import os
     import tempfile
     from pathlib import Path
 
@@ -142,11 +143,12 @@ def test_gpu_hardware_detection():
         temp_csv = f.name
 
     try:
-        # Test with mocked GPU detection
+        # Test with mocked GPU detection and SLURM node
         with (
             patch('torch.cuda.is_available', return_value=True),
-            patch('torch.cuda.get_device_name', return_value='NVIDIA A100-SXM4-40GB'),
+            patch('shutil.which', return_value='/usr/bin/nvidia-smi'),  # Mock nvidia-smi path
             patch('subprocess.run') as mock_subprocess,
+            patch.dict(os.environ, {'SLURMD_NODENAME': '211affn012'}),
         ):
             # Mock nvidia-smi output
             mock_result = MagicMock()
@@ -178,9 +180,9 @@ def test_gpu_hardware_detection():
                         result_data = json.load(f)
 
                     provenance = result_data.get('provenance', {})
-                    assert 'gpu_model' in provenance
+                    assert 'compute_node' in provenance
                     assert 'gpu_driver_version' in provenance
-                    assert provenance['gpu_model'] == 'NVIDIA A100-SXM4-40GB'
+                    assert provenance['compute_node'] == '211affn012'
                     assert provenance['gpu_driver_version'] == '525.85.12'
                     assert provenance['device_used'] == 'cuda'
 
@@ -197,6 +199,7 @@ def test_gpu_hardware_detection():
 def test_gpu_hardware_detection_cpu():
     """Test GPU hardware detection when CUDA is not available."""
     import json
+    import os
     import tempfile
     from pathlib import Path
 
@@ -208,40 +211,50 @@ def test_gpu_hardware_detection_cpu():
         temp_csv = f.name
 
     try:
-        # Test with CUDA not available
-        with (
-            patch('torch.cuda.is_available', return_value=False),
-            patch('torch.__version__', '2.3.1'),
-        ):
-            # Create a temporary output file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as json_f:
-                temp_json = json_f.name
+        # Test with CUDA not available and no SLURM env vars
+        env_backup = os.environ.copy()
+        try:
+            # Remove SLURM vars if they exist
+            for key in ['SLURMD_NODENAME', 'SLURM_NODELIST', 'SLURM_JOB_NODELIST']:
+                os.environ.pop(key, None)
 
-            try:
-                # Call the function
-                result_path = _create_volumes_json_file(
-                    volumes_csv=temp_csv,
-                    source_t1w_json_path=None,
-                    device_used='cpu',
-                    roi_list_tsv=None,
-                    source_file=None,
-                )
+            with (
+                patch('torch.cuda.is_available', return_value=False),
+                patch('torch.__version__', '2.3.1'),
+            ):
+                # Create a temporary output file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as json_f:
+                    temp_json = json_f.name
 
-                # Read the result and check GPU info
-                with open(result_path) as f:
-                    result_data = json.load(f)
+                try:
+                    # Call the function
+                    result_path = _create_volumes_json_file(
+                        volumes_csv=temp_csv,
+                        source_t1w_json_path=None,
+                        device_used='cpu',
+                        roi_list_tsv=None,
+                        source_file=None,
+                    )
 
-                provenance = result_data.get('provenance', {})
-                assert 'gpu_model' in provenance
-                assert 'gpu_driver_version' in provenance
-                assert provenance['gpu_model'] == 'N/A'
-                assert provenance['gpu_driver_version'] == 'N/A'
-                assert provenance['device_used'] == 'cpu'
+                    # Read the result and check GPU info
+                    with open(result_path) as f:
+                        result_data = json.load(f)
 
-            finally:
-                # Clean up temporary files
-                Path(temp_json).unlink(missing_ok=True)
-                Path(result_path).unlink(missing_ok=True)
+                    provenance = result_data.get('provenance', {})
+                    assert 'compute_node' in provenance
+                    assert 'gpu_driver_version' in provenance
+                    assert provenance['compute_node'] == 'N/A'
+                    assert provenance['gpu_driver_version'] == 'N/A'
+                    assert provenance['device_used'] == 'cpu'
+
+                finally:
+                    # Clean up temporary files
+                    Path(temp_json).unlink(missing_ok=True)
+                    Path(result_path).unlink(missing_ok=True)
+        finally:
+            # Restore environment
+            os.environ.clear()
+            os.environ.update(env_backup)
 
     finally:
         # Clean up temporary CSV
