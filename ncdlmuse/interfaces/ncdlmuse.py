@@ -50,11 +50,6 @@ class NiChartDLMUSEInputSpec(BaseInterfaceInputSpec):
     save_all_outputs = traits.Bool(
         False, usedefault=True, desc='Save all intermediate outputs including raw outputs dir'
     )
-    refaced_data = traits.Bool(
-        False,
-        usedefault=True,
-        desc='Refine DLICV mask by keeping largest connected component (for refaced data)',
-    )
     # Dummy input to force re-run by invalidating cache
     _timestamp = traits.Float(desc='Timestamp for cache invalidation')
     # Dummy input to enforce dependency on workdir clearing
@@ -178,8 +173,6 @@ class NiChartDLMUSE(SimpleInterface):
             cmd.append('--disable_tta')
         if self.inputs.clear_cache:
             cmd.append('--clear_cache')
-        if self.inputs.refaced_data:
-            cmd.append('--refaced-data')
 
         logger.log(_IMPORTANT_LEVEL, f'Running command: {" ".join(cmd)}')
         try:

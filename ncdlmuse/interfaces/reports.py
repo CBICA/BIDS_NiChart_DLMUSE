@@ -218,7 +218,7 @@ class WorkflowProvenanceReportlet(SummaryInterface):
         'cuda_version': 'CUDA Version',
         'cudnn_version': 'cuDNN Version',
         'device_used': 'Device Used',
-        'gpu_model': 'GPU Model',
+        'compute_node': 'Compute Node',
         'gpu_driver_version': 'GPU Driver Version',
         # Add other known keys here if they appear in your provenance dict
     }
