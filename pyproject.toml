@@ -38,7 +38,7 @@ dependencies = [
     "requests",
     "templateflow <= 25.1.1",
     "toml",
-    "torch==2.3.1+cu121",
+    "torch==2.9.1",
     "nvidia-ml-py",
     "scipy",
     "huggingface_hub",
