@@ -38,17 +38,20 @@ COPY . /src/ncdlmuse/
 RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu121 -e .
 
 # Install CBICA packages and pre-cache models
-# Clone and install DLICV and DLMUSE from GitHub
-RUN cd /tmp && \
+# Clone and install DLICV, DLMUSE, and NiChart_DLMUSE in order
+RUN mkdir -p /tmp/cbica_repos && \
+    cd /tmp/cbica_repos && \
     git clone https://github.com/CBICA/DLICV.git && \
-    cd DLICV && \
-    pip install --no-cache-dir . && \
-    cd /tmp && \
     git clone https://github.com/CBICA/DLMUSE.git && \
-    cd DLMUSE && \
-    pip install --no-cache-dir . && \
-    cd /tmp && \
-    rm -rf DLICV DLMUSE
+    git clone https://github.com/CBICA/NiChart_DLMUSE.git && \
+    cd DLICV && \
+    pip install --no-cache-dir -e . && \
+    cd ../DLMUSE && \
+    pip install --no-cache-dir -e . && \
+    cd ../NiChart_DLMUSE && \
+    pip install --no-cache-dir -e . && \
+    cd / && \
+    rm -rf /tmp/cbica_repos
 
 # Pre-cache models by running with dummy input
 # The commands may fail with empty input, but models will be downloaded/cached
@@ -57,9 +60,6 @@ RUN mkdir -p /dummyinput /dummyoutput && \
     (DLICV -i /dummyinput -o /dummyoutput || true) && \
     (DLMUSE -i /dummyinput -o /dummyoutput || true) && \
     rm -rf /dummyinput /dummyoutput
-    
-# Install NiChart_DLMUSE 0.1.7
-RUN pip install --no-cache-dir NiChart_DLMUSE==0.1.7
 
 # Entrypoint
 ENTRYPOINT ["/opt/conda/bin/ncdlmuse"]
