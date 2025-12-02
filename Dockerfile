@@ -35,21 +35,18 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . /src/ncdlmuse/
 
 # Install the package in editable mode (with PyTorch CUDA index)
-RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu121 -e .
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu121 -e . && \
+    pip install --no-cache-dir NiChart_DLMUSE==0.1.7
 
 # Install CBICA packages and pre-cache models
-# Clone and install DLICV, DLMUSE, and NiChart_DLMUSE in order
 RUN mkdir -p /tmp/cbica_repos && \
     cd /tmp/cbica_repos && \
     git clone https://github.com/CBICA/DLICV.git && \
     git clone https://github.com/CBICA/DLMUSE.git && \
-    git clone https://github.com/CBICA/NiChart_DLMUSE.git && \
-    cd ../NiChart_DLMUSE && \
-    pip install --no-cache-dir -e . && \
-    cd DLICV && \
-    pip install --no-cache-dir -e . && \
-    cd ../DLMUSE && \
-    pip install --no-cache-dir -e . && \
+    cd DLMUSE && \
+    pip install -e . && \
+    cd ../DLICV && \
+    pip install -e . && \
     cd / && \
     rm -rf /tmp/cbica_repos
 
