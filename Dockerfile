@@ -44,11 +44,11 @@ RUN mkdir -p /tmp/cbica_repos && \
     git clone https://github.com/CBICA/DLICV.git && \
     git clone https://github.com/CBICA/DLMUSE.git && \
     git clone https://github.com/CBICA/NiChart_DLMUSE.git && \
+    cd ../NiChart_DLMUSE && \
+    pip install --no-cache-dir -e . && \
     cd DLICV && \
     pip install --no-cache-dir -e . && \
     cd ../DLMUSE && \
-    pip install --no-cache-dir -e . && \
-    cd ../NiChart_DLMUSE && \
     pip install --no-cache-dir -e . && \
     cd / && \
     rm -rf /tmp/cbica_repos

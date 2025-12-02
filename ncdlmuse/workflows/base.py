@@ -1026,6 +1026,10 @@ def _copy_raw_outputs_dir(raw_outputs_dir, output_dir):
     import shutil
     from pathlib import Path
 
+    from ncdlmuse import config
+
+    LOGGER = config.loggers.getLogger('ncdlmuse.workflows.base')
+
     if not raw_outputs_dir:
         return None
 
