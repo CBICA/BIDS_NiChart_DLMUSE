@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import time
 import warnings
@@ -1239,7 +1240,7 @@ def _create_volumes_json_file(
         gpu_driver_version = 'N/A'
 
     # Get compute node name from SLURM environment variables
-    # Priority: SLURMD_NODENAME (most specific) > SLURM_NODELIST > SLURM_JOB_NODELIST
+    # Priority: SLURMD_NODENAME (most specific) > SLURM_NODELIST > SLURM_JOB_NODELIST > hostname
     if os.getenv('SLURMD_NODENAME'):
         compute_node = os.getenv('SLURMD_NODENAME')
         LOGGER.info(f'Compute node from SLURMD_NODENAME: {compute_node}')
@@ -1250,8 +1251,13 @@ def _create_volumes_json_file(
         compute_node = os.getenv('SLURM_JOB_NODELIST')
         LOGGER.info(f'Compute node from SLURM_JOB_NODELIST: {compute_node}')
     else:
-        compute_node = 'N/A'
-        LOGGER.info('No SLURM environment variables found, compute node not available')
+        # Fallback to system hostname if SLURM variables are not available
+        try:
+            compute_node = socket.gethostname()
+            LOGGER.info(f'Compute node from hostname: {compute_node}')
+        except OSError as e:
+            compute_node = 'N/A'
+            LOGGER.warning(f'Could not determine compute node (hostname lookup failed: {e})')
 
     provenance = {
         'bids_ncdlmuse_version': bids_ncdlmuse_version,
