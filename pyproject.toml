@@ -19,7 +19,6 @@ classifiers = [
 license = {file = "LICENSE.md"}
 requires-python = ">=3.10"
 dependencies = [
-    'importlib_resources; python_version < "3.11"',
     "acres",
     "indexed_gzip <= 1.10.1",
     "looseversion",

@@ -11,7 +11,7 @@ import subprocess
 import time
 import warnings
 from collections import OrderedDict
-from importlib import resources as importlib_resources
+from importlib import resources
 from pathlib import Path
 
 import pandas as pd
@@ -117,17 +117,17 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
 
     # --- Pre-load package data once ---
     try:
-        with importlib_resources.as_file(
-            importlib_resources.files('ncdlmuse.data') / 'MUSE_mapping_consecutive_indices.tsv'
+        with resources.as_file(
+            resources.files('ncdlmuse.data') / 'MUSE_mapping_consecutive_indices.tsv'
         ) as p:
             mapping_tsv = str(p)
-        with importlib_resources.as_file(
-            importlib_resources.files('ncdlmuse.data') / 'io_spec.json'
+        with resources.as_file(
+            resources.files('ncdlmuse.data') / 'io_spec.json'
         ) as p:
             io_spec = str(p)
         # Preload the ROI list TSV
-        with importlib_resources.as_file(
-            importlib_resources.files('ncdlmuse.data') / 'MUSE_ROI_complete_list.tsv'
+        with resources.as_file(
+            resources.files('ncdlmuse.data') / 'MUSE_ROI_complete_list.tsv'
         ) as p:
             roi_list_tsv = str(p)
     except FileNotFoundError as e:
@@ -1052,8 +1052,10 @@ def _create_volumes_json_file(
     import os
     import re
     import shutil
+    import socket
     import subprocess
     from collections import OrderedDict
+    from importlib import resources
     from pathlib import Path
 
     import pandas as pd

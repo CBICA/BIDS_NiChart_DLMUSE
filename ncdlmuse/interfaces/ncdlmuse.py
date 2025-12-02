@@ -4,7 +4,7 @@
 import os
 import shutil
 import subprocess
-from importlib import resources as importlib_resources
+from importlib import resources
 from pathlib import Path
 
 import pandas as pd
@@ -308,8 +308,8 @@ class NiChartDLMUSE(SimpleInterface):
         # Try to load ROI mapping from package data
         id_to_name = {}
         try:
-            mapping_file_res = importlib_resources.files('ncdlmuse.data') / _ROI_MAPPING_FILE
-            with importlib_resources.as_file(mapping_file_res) as mapping_file_path:
+            mapping_file_res = resources.files('ncdlmuse.data') / _ROI_MAPPING_FILE
+            with resources.as_file(mapping_file_res) as mapping_file_path:
                 mapping_df = pd.read_csv(mapping_file_path)
                 mapping_df['ID'] = mapping_df['ID'].astype(str)  # Ensure ID is string
                 id_to_name = mapping_df.set_index('ID')['Full_Name'].to_dict()
