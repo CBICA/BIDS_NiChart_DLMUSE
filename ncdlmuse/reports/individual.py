@@ -572,9 +572,10 @@ def generate_reports(
             layout = BIDSLayout(
                 root=str(original_root),
                 derivatives=new_layout_derivatives,
-                invalid_filters='allow',
                 validate=False,
-                indexer=BIDSLayoutIndexer(validate=False, index_metadata=False),
+                indexer=BIDSLayoutIndexer(
+                    validate=False, index_metadata=False, invalid_filters='allow'
+                ),
             )
         except (OSError, ValueError, RuntimeError) as e:
             config.loggers.cli.error(f'Failed to re-create BIDSLayout: {e}')
