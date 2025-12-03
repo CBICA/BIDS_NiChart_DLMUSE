@@ -121,9 +121,7 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
             resources.files('ncdlmuse.data') / 'MUSE_mapping_consecutive_indices.tsv'
         ) as p:
             mapping_tsv = str(p)
-        with resources.as_file(
-            resources.files('ncdlmuse.data') / 'io_spec.json'
-        ) as p:
+        with resources.as_file(resources.files('ncdlmuse.data') / 'io_spec.json') as p:
             io_spec = str(p)
         # Preload the ROI list TSV
         with resources.as_file(
