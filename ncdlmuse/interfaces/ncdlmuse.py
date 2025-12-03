@@ -270,8 +270,41 @@ class NiChartDLMUSE(SimpleInterface):
             raise
 
         # --- 4. Keep raw outputs and temp_working_dir when save_all_outputs is True --- #
-        # Intentionally do nothing here. We never remove or relocate NiChart_DLMUSE raw outputs
-        # (including temp_working_dir) when save_all_outputs=True.
+        # When save_all_outputs=True, also copy essential outputs to root of raw_output_dir
+        # for easier access (in addition to keeping everything in temp_working_dir)
+        if getattr(self.inputs, 'save_all_outputs', False):
+            try:
+                # Copy essential outputs to root of raw_output_dir for easy access
+                root_seg_path = raw_output_dir / raw_seg_path.name
+                root_mask_subdir = raw_output_dir / _S2_DLICV_SUBDIR
+                root_mask_path = root_mask_subdir / raw_mask_path.name
+                root_volumes_csv_path = raw_output_dir / raw_volumes_csv_path.name
+
+                root_mask_subdir.mkdir(exist_ok=True)
+                if not root_seg_path.exists() or root_seg_path != raw_seg_path:
+                    shutil.copy2(raw_seg_path, root_seg_path)
+                    logger.info(
+                        f'Copied {raw_seg_path.name} to root of raw_output_dir: {root_seg_path}'
+                    )
+                if not root_mask_path.exists() or root_mask_path != raw_mask_path:
+                    shutil.copy2(raw_mask_path, root_mask_path)
+                    logger.info(
+                        f'Copied {raw_mask_path.name} to root of raw_output_dir: {root_mask_path}'
+                    )
+                if (
+                    not root_volumes_csv_path.exists()
+                    or root_volumes_csv_path != raw_volumes_csv_path
+                ):
+                    shutil.copy2(raw_volumes_csv_path, root_volumes_csv_path)
+                    logger.info(
+                        f'Copied {raw_volumes_csv_path.name} to root of raw_output_dir: '
+                        f'{root_volumes_csv_path}'
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    f'Error copying essential outputs to root of raw_output_dir (non-fatal): {e}'
+                )
+                # Don't raise - this is just for convenience, files are still in temp_working_dir
 
         # --- 5. Optionally prune temporary working directory when not keeping everything --- #
         # If not saving all outputs, remove ONLY the temp_working_dir, keep other raw outputs.
