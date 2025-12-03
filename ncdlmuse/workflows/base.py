@@ -6,11 +6,12 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import time
 import warnings
 from collections import OrderedDict
-from importlib import resources as importlib_resources
+from importlib import resources
 from pathlib import Path
 
 import pandas as pd
@@ -116,17 +117,15 @@ def init_ncdlmuse_wf(name='ncdlmuse_wf'):
 
     # --- Pre-load package data once ---
     try:
-        with importlib_resources.as_file(
-            importlib_resources.files('ncdlmuse.data') / 'MUSE_mapping_consecutive_indices.tsv'
+        with resources.as_file(
+            resources.files('ncdlmuse.data') / 'MUSE_mapping_consecutive_indices.tsv'
         ) as p:
             mapping_tsv = str(p)
-        with importlib_resources.as_file(
-            importlib_resources.files('ncdlmuse.data') / 'io_spec.json'
-        ) as p:
+        with resources.as_file(resources.files('ncdlmuse.data') / 'io_spec.json') as p:
             io_spec = str(p)
         # Preload the ROI list TSV
-        with importlib_resources.as_file(
-            importlib_resources.files('ncdlmuse.data') / 'MUSE_ROI_complete_list.tsv'
+        with resources.as_file(
+            resources.files('ncdlmuse.data') / 'MUSE_ROI_complete_list.tsv'
         ) as p:
             roi_list_tsv = str(p)
     except FileNotFoundError as e:
@@ -669,6 +668,23 @@ BIDS_NiChart_DLMUSE is built using *Nipype* version {config.environment.nipype_v
     # Connect pathfinder output path to copy node out_file
     workflow.connect(ds_volumes_json_pathfinder, 'out_file', copy_json_node, 'out_file')
 
+    # --- Copy raw outputs directory if save_all_outputs is enabled --- #
+    if save_all_outputs:
+        copy_raw_outputs_node = pe.Node(
+            niu.Function(
+                input_names=['raw_outputs_dir', 'output_dir'],
+                output_names=['copied_dir'],
+                function=_copy_raw_outputs_dir,
+            ),
+            name='copy_raw_outputs',
+        )
+        copy_raw_outputs_node.inputs.output_dir = str(derivatives_dir)
+        workflow.connect(dlmuse_node, 'raw_outputs_dir', copy_raw_outputs_node, 'raw_outputs_dir')
+        LOGGER.info(
+            f'[{subject_id_str}] Added node to copy raw outputs directory '
+            f'when save_all_outputs=True'
+        )
+
     # --- Add Reportlet Generation Nodes --- #
     LOGGER.info(
         f'[{subject_id_str}] Adding reportlet nodes. Reportlets will be saved to: {reportlets_dir}'
@@ -1000,6 +1016,44 @@ def _copy_single_file(in_file, out_file):
     return out_file
 
 
+def _copy_raw_outputs_dir(raw_outputs_dir, output_dir):
+    """Copy the entire raw outputs directory to the final output directory.
+
+    This preserves all NiChart_DLMUSE raw outputs when save_all_outputs=True.
+    """
+    import shutil
+    from pathlib import Path
+
+    from ncdlmuse import config
+
+    LOGGER = config.loggers.getLogger('ncdlmuse.workflows.base')
+
+    if not raw_outputs_dir:
+        return None
+
+    raw_dir = Path(raw_outputs_dir)
+    if not raw_dir.exists() or not raw_dir.is_dir():
+        LOGGER.warning(f'Raw outputs directory does not exist: {raw_outputs_dir}')
+        return None
+
+    # Create destination directory in the output derivatives folder
+    dest_dir = Path(output_dir) / 'raw_outputs'
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy the entire directory tree
+    try:
+        # Copy the directory contents, preserving structure
+        dest_raw_dir = dest_dir / raw_dir.name
+        if dest_raw_dir.exists():
+            shutil.rmtree(dest_raw_dir)
+        shutil.copytree(raw_dir, dest_raw_dir, dirs_exist_ok=False)
+        LOGGER.info(f'Copied raw outputs directory from {raw_dir} to {dest_raw_dir}')
+        return str(dest_raw_dir)
+    except (OSError, shutil.Error) as e:
+        LOGGER.error(f'Error copying raw outputs directory: {e}')
+        return None
+
+
 # --- Helper Function for Metadata --- #
 def _create_brain_mask_meta(raw_source_file):
     """Generate metadata dictionary for brain mask JSON sidecar."""
@@ -1051,8 +1105,10 @@ def _create_volumes_json_file(
     import os
     import re
     import shutil
+    import socket
     import subprocess
     from collections import OrderedDict
+    from importlib import resources
     from pathlib import Path
 
     import pandas as pd
@@ -1239,7 +1295,7 @@ def _create_volumes_json_file(
         gpu_driver_version = 'N/A'
 
     # Get compute node name from SLURM environment variables
-    # Priority: SLURMD_NODENAME (most specific) > SLURM_NODELIST > SLURM_JOB_NODELIST
+    # Priority: SLURMD_NODENAME (most specific) > SLURM_NODELIST > SLURM_JOB_NODELIST > hostname
     if os.getenv('SLURMD_NODENAME'):
         compute_node = os.getenv('SLURMD_NODENAME')
         LOGGER.info(f'Compute node from SLURMD_NODENAME: {compute_node}')
@@ -1250,8 +1306,13 @@ def _create_volumes_json_file(
         compute_node = os.getenv('SLURM_JOB_NODELIST')
         LOGGER.info(f'Compute node from SLURM_JOB_NODELIST: {compute_node}')
     else:
-        compute_node = 'N/A'
-        LOGGER.info('No SLURM environment variables found, compute node not available')
+        # Fallback to system hostname if SLURM variables are not available
+        try:
+            compute_node = socket.gethostname()
+            LOGGER.info(f'Compute node from hostname: {compute_node}')
+        except OSError as e:
+            compute_node = 'N/A'
+            LOGGER.warning(f'Could not determine compute node (hostname lookup failed: {e})')
 
     provenance = {
         'bids_ncdlmuse_version': bids_ncdlmuse_version,

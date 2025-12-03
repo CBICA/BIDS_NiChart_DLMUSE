@@ -28,26 +28,43 @@ COPY long_description.rst ./
 COPY LICENSE.md ./
 
 # Install build dependencies
-RUN pip install --no-cache-dir 'setuptools<81' build hatchling hatch-vcs nvidia-ml-py
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir 'setuptools>=80' build hatchling hatch-vcs nvidia-ml-py
 
 # Copy the rest of the source
 COPY . /src/ncdlmuse/
 
-# Install the package in editable mode (with PyTorch CUDA index)
-RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu121 -e .
+# Install CBICA packages first (before ncdlmuse to avoid dependency conflicts)
+# Clone all repos, then install dependencies (DLICV, DLMUSE) before NiChart_DLMUSE
+# Install without -e flag so packages are copied to site-packages (not symlinked)
+RUN mkdir -p /tmp/cbica_repos && \
+    cd /tmp/cbica_repos && \
+    git clone https://github.com/CBICA/DLICV.git && \
+    git clone https://github.com/CBICA/DLMUSE.git && \
+    git clone https://github.com/CBICA/NiChart_DLMUSE.git && \
+    cd DLICV && \
+    pip install --no-cache-dir . && \
+    cd ../DLMUSE && \
+    pip install --no-cache-dir . && \
+    cd ../NiChart_DLMUSE && \
+    pip install --no-cache-dir . && \
+    cd / && \
+    rm -rf /tmp/cbica_repos && \
+    python -c "from NiChart_DLMUSE.__main__ import main; print('✓ NiChart_DLMUSE module import successful')" && \
+    /opt/conda/bin/NiChart_DLMUSE --version && \
+    echo "✓ NiChart_DLMUSE command works"
 
-# Clone & install CBICA packages and pre-cache models
-RUN rm -rf DLICV DLMUSE NiChart_DLMUSE && \
-    git clone --depth 1 https://github.com/CBICA/DLICV.git && \
-    pip install --no-cache-dir ./DLICV && \
-    git clone --depth 1 https://github.com/CBICA/DLMUSE.git && \
-    pip install --no-cache-dir ./DLMUSE && \
-    git clone --depth 1 https://github.com/CBICA/NiChart_DLMUSE.git && \
-    pip install --no-cache-dir ./NiChart_DLMUSE && \
-    mkdir -p /dummyinput /dummyoutput && \
-    DLICV -i /dummyinput -o /dummyoutput && \
-    DLMUSE -i /dummyinput -o /dummyoutput && \
-    rm -rf DLICV DLMUSE NiChart_DLMUSE
+# Install ncdlmuse in editable mode
+RUN pip install --no-cache-dir --force-reinstall --extra-index-url https://download.pytorch.org/whl/cu121 'torch==2.3.1+cu121' && \
+    pip install --no-cache-dir -e .
+
+# Pre-cache models by running with dummy input
+# The commands may fail with empty input, but models will be downloaded/cached
+# Use || true to allow build to continue after model download succeeds
+RUN mkdir -p /dummyinput /dummyoutput && \
+    (DLICV -i /dummyinput -o /dummyoutput || true) && \
+    (DLMUSE -i /dummyinput -o /dummyoutput || true) && \
+    rm -rf /dummyinput /dummyoutput
 
 # Entrypoint
 ENTRYPOINT ["/opt/conda/bin/ncdlmuse"]
