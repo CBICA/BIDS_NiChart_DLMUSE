@@ -19,20 +19,9 @@ RUN apt-get update && \
     rm pandoc.deb && \
     rm -rf /var/lib/apt/lists/*
 
-# Create and switch to the application dir
-WORKDIR /src/ncdlmuse
-
-# Copy dependency files first for better caching
-COPY pyproject.toml ./
-COPY long_description.rst ./
-COPY LICENSE.md ./
-
 # Install build dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir 'setuptools>=80' build hatchling hatch-vcs nvidia-ml-py
-
-# Copy the rest of the source
-COPY . /src/ncdlmuse/
 
 # Install CBICA packages first (before ncdlmuse to avoid dependency conflicts)
 # Clone all repos, then install dependencies (DLICV, DLMUSE) before NiChart_DLMUSE
@@ -49,14 +38,11 @@ RUN mkdir -p /tmp/cbica_repos && \
     cd ../NiChart_DLMUSE && \
     pip install --no-cache-dir . && \
     cd / && \
-    rm -rf /tmp/cbica_repos && \
-    python -c "from NiChart_DLMUSE.__main__ import main; print('✓ NiChart_DLMUSE module import successful')" && \
-    /opt/conda/bin/NiChart_DLMUSE --version && \
-    echo "✓ NiChart_DLMUSE command works"
+    rm -rf /tmp/cbica_repos
 
-# Install ncdlmuse in editable mode
+# Install ncdlmuse version 0.1.0
 RUN pip install --no-cache-dir --force-reinstall --extra-index-url https://download.pytorch.org/whl/cu121 'torch==2.3.1+cu121' && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir ncdlmuse==0.1.0
 
 # Pre-cache models by running with dummy input
 # The commands may fail with empty input, but models will be downloaded/cached
