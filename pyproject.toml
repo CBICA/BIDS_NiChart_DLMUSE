@@ -20,7 +20,7 @@ license = {file = "LICENSE.md"}
 requires-python = ">=3.10"
 dependencies = [
     "acres",
-    "indexed_gzip <= 1.10.1",
+    "indexed_gzip <= 1.10.3",
     "looseversion",
     "networkx == 2.8.8",  # nipype needs networkx, but 3+ isn't compatible with nipype 1.8.5
     "nibabel >= 5.2",
