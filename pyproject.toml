@@ -32,7 +32,7 @@ dependencies = [
     "numpy == 1.26.4",  # Forced version for NiChart_DLMUSE 0.1.7 compatibility
     "packaging",
     "pandas",
-    "pydicom >= 1.4.0,< 2.0",  # Required for nibabel compatibility
+    "pydicom >= 1.4.0,< 4.0",  # Required for nibabel compatibility
     "pybids <= 0.21.0",
     "psutil <= 7.1.3",
     "python-gdcm == 3.0.26",  # Required for NiChart_DLMUSE 0.1.7
