@@ -29,7 +29,7 @@ dependencies = [
     "niworkflows >= 1.13,< 1.15",
     "fmriprep >= 25.0.0",
     "nireports >= 25.0.1",  # Required for report generation
-    "numpy == 1.26.4",  # Forced version for NiChart_DLMUSE 0.1.7 compatibility
+    "numpy == 2.2.6",  # Forced version for NiChart_DLMUSE 0.1.7 compatibility
     "packaging",
     "pandas",
     "pydicom >= 1.4.0,< 2.0",  # Required for nibabel compatibility
