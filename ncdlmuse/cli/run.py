@@ -58,13 +58,13 @@ def main():
     from pathlib import Path
 
     from .. import config
-    from ..utils.bids import write_derivative_description
+    from ..utils.bids import write_bidsignore, write_derivative_description
     from ..workflows.group import aggregate_volumes
     from .parser import parse_args
 
     # Helper function to ensure dataset_description.json exists
     def ensure_dataset_description():
-        """Create dataset_description.json if it doesn't exist."""
+        """Create dataset_description.json and .bidsignore if they don't exist."""
         try:
             # Check if file already exists to avoid unnecessary recreation
             desc_path = Path(config.execution.ncdlmuse_dir) / 'dataset_description.json'
@@ -72,9 +72,13 @@ def main():
                 write_derivative_description(
                     config.execution.bids_dir, config.execution.ncdlmuse_dir
                 )
+            # Ensure .bidsignore file exists
+            write_bidsignore(config.execution.ncdlmuse_dir)
             return True
         except (OSError, PermissionError) as e:
-            config.loggers.cli.warning(f'Error creating dataset_description.json: {e}')
+            config.loggers.cli.warning(
+                f'Error creating dataset_description.json or .bidsignore: {e}'
+            )
             return False
 
     # 1. Parse arguments and config file, setup logging
