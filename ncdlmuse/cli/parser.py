@@ -342,14 +342,6 @@ def _build_parser():
         default=False,
         help='Save all intermediate NiChart_DLMUSE outputs (including raw outputs directory).',
     )
-    g_dlmuse.add_argument(
-        '--refaced-data',
-        '--refaced_data',
-        dest='refaced_data',
-        action='store_true',
-        default=False,
-        help='Refine DLICV mask by keeping largest connected component (for refaced data).',
-    )
 
     # --- Performance Options ---
     g_perfm = parser.add_argument_group('Options to handle performance')
@@ -594,7 +586,6 @@ def parse_args(args=None, namespace=None):
     config.workflow.dlmuse_disable_tta = cli_vars['disable_tta']
     config.workflow.dlmuse_clear_cache = cli_vars['clear_cache']
     config.workflow.dlmuse_save_all_outputs = cli_vars['save_all_nichartdlmuse_outputs']
-    config.workflow.dlmuse_refaced_data = cli_vars['refaced_data']
 
     # --- Resolve and Finalize Paths ---
     # BIDS Dir (required, checked by PathExists in parser)

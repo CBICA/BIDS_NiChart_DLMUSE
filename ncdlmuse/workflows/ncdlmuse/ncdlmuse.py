@@ -40,7 +40,6 @@ def init_dlmuse_wf(
     disable_tta=False,
     clear_cache=False,
     save_all_outputs=False,
-    refaced_data=False,
     _timestamp=None,
 ):
     """Initialize the core NiChart_DLMUSE sub-workflow.
@@ -81,9 +80,6 @@ def init_dlmuse_wf(
     save_all_outputs : bool, optional
         Save all intermediate NiChart_DLMUSE outputs including raw outputs directory
         (default: False).
-    refaced_data : bool, optional
-        Refine DLICV mask by keeping only the largest connected component (for refaced data)
-        (default: False).
     _timestamp : str or None, optional
         Timestamp for the workflow.
 
@@ -122,7 +118,6 @@ def init_dlmuse_wf(
         'disable_tta': disable_tta,
         'clear_cache': clear_cache,
         'save_all_outputs': save_all_outputs,
-        'refaced_data': refaced_data,
     }
 
     # Only add _timestamp if it's not None
