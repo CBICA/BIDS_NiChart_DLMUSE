@@ -1128,25 +1128,15 @@ def _create_volumes_json_file(
         LOGGER.warning('No source T1w JSON sidecar path provided.')
 
     # 2. Read volumes CSV/TSV
-    volumes_dict = {}
     volumes_ordered_dict = OrderedDict()  # Initialize OrderedDict
     try:
         LOGGER.info(f'Attempting to read volumes from: {volumes_csv}')
         volumes_df = pd.read_csv(volumes_csv, sep='\t')
         LOGGER.info(f'Successfully read DataFrame from {volumes_csv}. Shape: {volumes_df.shape}')
         if not volumes_df.empty:
-            # Assume single row of volumes
-            volume_data = volumes_df.iloc[0].to_dict()
-            # Use original keys directly without any conversion
-            volumes_dict = dict(volume_data)
-
-            # Create OrderedDict with 'mrid' first
-            if 'mrid' in volumes_dict:
-                volumes_ordered_dict['mrid'] = volumes_dict.pop('mrid')
-
-            # Add the rest of the items, sorted alphabetically for consistency
-            for key in sorted(volumes_dict.keys()):
-                volumes_ordered_dict[key] = volumes_dict[key]
+            # Preserve exact column order from CSV
+            for col in volumes_df.columns:
+                volumes_ordered_dict[col] = volumes_df.iloc[0][col]
 
         else:
             # This case is problematic - indicates successful read but no data

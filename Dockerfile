@@ -40,9 +40,9 @@ RUN mkdir -p /tmp/cbica_repos && \
     cd / && \
     rm -rf /tmp/cbica_repos
 
-# Install ncdlmuse version 0.1.3
+# Install ncdlmuse version 0.1.4
 RUN pip install --no-cache-dir --force-reinstall --extra-index-url https://download.pytorch.org/whl/cu121 'torch==2.3.1+cu121' && \
-    pip install --no-cache-dir ncdlmuse==0.1.3
+    pip install --no-cache-dir ncdlmuse==0.1.4
 
 # Pre-cache models by running with dummy input
 # The commands may fail with empty input, but models will be downloaded/cached
