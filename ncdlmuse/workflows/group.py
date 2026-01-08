@@ -74,7 +74,7 @@ def aggregate_volumes(derivatives_dir, output_file, add_provenance=False):
                     else:
                         print(
                             f"WARNING: No 'provenance' dict found in {json_path}. "
-                            "Provenance columns will be empty for this row.",
+                            'Provenance columns will be empty for this row.',
                             file=sys.stderr,
                         )
 
