@@ -35,6 +35,7 @@ def aggregate_volumes(derivatives_dir, output_file, add_provenance=False):
 
         all_data_rows = []
         all_volume_keys = set()  # Keep track of all unique volume keys
+        volume_keys_ordered = []  # Keep track of volume keys in original order
         all_provenance_keys = set()  # Keep track of all unique provenance keys
 
         for json_path in json_files:
@@ -60,7 +61,11 @@ def aggregate_volumes(derivatives_dir, output_file, add_provenance=False):
 
                 # Add volumes data
                 row.update(data['volumes'])
-                all_volume_keys.update(data['volumes'].keys())
+                # Track volume keys in original order
+                for key in data['volumes'].keys():
+                    if key not in all_volume_keys:
+                        volume_keys_ordered.append(key)
+                    all_volume_keys.add(key)
 
                 # Add provenance data if requested
                 if add_provenance:
@@ -95,12 +100,13 @@ def aggregate_volumes(derivatives_dir, output_file, add_provenance=False):
         # Create DataFrame
         df = pd.DataFrame(all_data_rows)
 
-        # Define column order: IDs first, then sorted volume keys, then provenance (if requested)
+        # Define column order: IDs first, then volume keys in original order,
+        # then provenance (if requested)
         id_cols = ['subject']
         if 'session' in df.columns:
             id_cols.append('session')
-        # Place 'mrid' next, if present, then remaining volumes sorted
-        volume_cols = sorted(all_volume_keys)
+        # Place 'mrid' next, if present, then remaining volumes in original order
+        volume_cols = volume_keys_ordered.copy()
         if 'mrid' in volume_cols:
             volume_cols.remove('mrid')
             final_cols = id_cols + ['mrid'] + volume_cols
