@@ -30,7 +30,7 @@ import requests
 
 from .. import __version__
 
-RELEASE_EXPIRY_DAYS = 14
+RELEASE_EXPIRY_DAYS = 7
 DATE_FMT = '%Y%m%d'
 
 
@@ -62,6 +62,13 @@ def check_latest():
             else:
                 if abs((now - date).days) > RELEASE_EXPIRY_DAYS:
                     outdated = True
+                # Also check if cached version is older than current local version
+                try:
+                    current = Version(__version__)
+                    if latest is not None and current > latest:
+                        outdated = True
+                except (InvalidVersion, AttributeError):
+                    pass
 
     if latest is None or outdated is True:
         response = None
