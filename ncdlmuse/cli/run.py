@@ -88,7 +88,7 @@ def main():
     if config.execution.analysis_level == 'group':
         config.loggers.cli.info('Performing group-level aggregation.')
         output_dir = Path(config.execution.ncdlmuse_dir)
-        group_output_file = output_dir / 'group_ncdlmuse.tsv'
+        group_output_file = output_dir / 'group_ncdlmuse_volumes.tsv'
         retcode = 0
 
         # Ensure dataset_description.json for the output directory
