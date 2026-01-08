@@ -4,7 +4,6 @@
 
 import json
 import os
-import re
 import shutil
 import socket
 import subprocess
@@ -352,6 +351,7 @@ def init_single_subject_wf(
         Path to the BIDS-Derivatives `io_spec.json` file.
     roi_list_tsv : str
         Path to the MUSE ROI complete list TSV file `data/MUSE_ROI_complete_list.tsv`.
+        (Note: Currently not used for volume name mapping, kept for backward compatibility.)
     derivatives_dir : str
         Path to the NCDLMUSE derivatives directory (e.g., `<output>/ncdlmuse`).
     reportlets_dir : str
@@ -1073,38 +1073,35 @@ def _create_segmentation_meta(raw_source_file):
     }
 
 
-# --- Helper Function for Snake Case --- #
-def _to_snake_case(text):
-    """Convert text to lowercase snake_case, handling CamelCase and separators."""
-    if not isinstance(text, str):
-        text = str(text)
-    # Add underscores for CamelCase and Acronyms
-    s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', text)
-    s2 = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1)
-    # Replace any sequence of one or more non-alphanumeric chars with a single underscore
-    s3 = re.sub(r'[^a-zA-Z0-9]+', '_', s2)
-    # Convert to lowercase and remove leading/trailing underscores
-    return s3.lower().strip('_')
-
-
 # pyright: ignore
 def _create_volumes_json_file(
     volumes_csv, source_t1w_json_path, device_used, roi_list_tsv, source_file=None
 ):
     """Create JSON with raw T1w metadata, provenance, and volumes, writing it to a file.
 
-    Uses roi_list_tsv to map NiChartDLMUSE output keys to Full_Name.
+    Converts volumes CSV directly to JSON using original column names from NiChart_DLMUSE.
+
+    Parameters
+    ----------
+    volumes_csv : str
+        Path to the volumes CSV/TSV file.
+    source_t1w_json_path : str or None
+        Path to the source T1w JSON sidecar file.
+    device_used : str
+        Device used for processing (e.g., 'cpu', 'cuda', 'mps').
+    roi_list_tsv : str
+        Path to ROI list TSV file (not currently used, kept for backward compatibility).
+    source_file : str or None, optional
+        Path to the source file.
     """
 
     # Imports required within the Nipype Function execution scope
     import json
     import os
-    import re
     import shutil
     import socket
     import subprocess
     from collections import OrderedDict
-    from importlib import resources
     from pathlib import Path
 
     import pandas as pd
@@ -1113,44 +1110,7 @@ def _create_volumes_json_file(
     from ncdlmuse import __version__ as bids_ncdlmuse_version
     from ncdlmuse import config
 
-    # Define helper function locally for Nipype Function scope
-    def _to_snake_case(text):
-        """Convert text to lowercase snake_case, handling CamelCase and separators."""
-        if not isinstance(text, str):
-            text = str(text)
-        # Add underscores for CamelCase and Acronyms
-        s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', text)
-        s2 = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1)
-        # Replace any sequence of one or more non-alphanumeric chars with a single underscore
-        s3 = re.sub(r'[^a-zA-Z0-9]+', '_', s2)
-        # Convert to lowercase and remove leading/trailing underscores
-        return s3.lower().strip('_')
-
     LOGGER = config.loggers.getLogger('ncdlmuse.workflows.base')
-
-    # --- Read ROI Name Mapping --- #
-    roi_mapping = {}
-    try:
-        roi_df = pd.read_csv(roi_list_tsv, sep='\t')
-        # Create mapping from snake_case(ID) -> snake_case(Full_Name)
-        for _, row in roi_df.iterrows():
-            # Ensure ID is treated as string before snake_casing
-            input_key = _to_snake_case(str(row['ID']))
-            output_key = _to_snake_case(row['Full_Name'])
-            roi_mapping[input_key] = output_key
-        LOGGER.info(
-            f'Successfully created ROI mapping from {roi_list_tsv}. {len(roi_mapping)} entries.'
-        )
-    except FileNotFoundError:
-        LOGGER.error(f'ROI list file not found: {roi_list_tsv}. Cannot map volume names.')
-        # Proceeding with original names for now, but logging error.
-    except KeyError as e:
-        LOGGER.error(
-            f'Missing expected column ({e}) in ROI list file: {roi_list_tsv}. '
-            f'Cannot map volume names.'
-        )
-    except (OSError, json.JSONDecodeError, ValueError) as e:
-        LOGGER.error(f'Error reading or processing ROI list file {roi_list_tsv}: {e!r}')
 
     # 1. bids_meta: Read from the provided source T1w JSON sidecar path
     bids_meta_dict = {}
@@ -1177,25 +1137,12 @@ def _create_volumes_json_file(
         if not volumes_df.empty:
             # Assume single row of volumes
             volume_data = volumes_df.iloc[0].to_dict()
-            # Convert keys using the loaded mapping, falling back to original snake_case if no map
-            volumes_dict = {}
-            for orig_key, value in volume_data.items():
-                snake_key = _to_snake_case(orig_key)
-                # Use mapped key if available, otherwise use original snake_key
-                final_key = roi_mapping.get(snake_key, snake_key)
-                # Skip if the final key is explicitly None or empty after potential mapping error
-                if final_key:
-                    volumes_dict[final_key] = value
-                else:
-                    LOGGER.warning(
-                        f'Skipping volume key "{orig_key}" (snake_case: '
-                        f'"{snake_key}") due to mapping issue or empty result.'
-                    )
+            # Use original keys directly without any conversion
+            volumes_dict = dict(volume_data)
 
             # Create OrderedDict with 'mrid' first
-            mrid_key = roi_mapping.get('mrid', 'mrid')  # Get mapped mrid key, default to 'mrid'
-            if mrid_key in volumes_dict:
-                volumes_ordered_dict[mrid_key] = volumes_dict.pop(mrid_key)
+            if 'mrid' in volumes_dict:
+                volumes_ordered_dict['mrid'] = volumes_dict.pop('mrid')
 
             # Add the rest of the items, sorted alphabetically for consistency
             for key in sorted(volumes_dict.keys()):

@@ -6,7 +6,7 @@ import pandas as pd
 from bids import BIDSLayout
 
 
-def aggregate_volumes(derivatives_dir, output_file):
+def aggregate_volumes(derivatives_dir, output_file, add_provenance=False):
     """Aggregates volumetric data from individual *_T1w.json files.
 
     Parameters
@@ -15,6 +15,9 @@ def aggregate_volumes(derivatives_dir, output_file):
         Path to the NCDLMUSE derivatives directory.
     output_file : str or Path
         Path where the output TSV `group_ncdlmuse_volumes.tsv` should be saved.
+    add_provenance : bool, optional
+        If True, include provenance information (version, device, compute node, etc.)
+        as additional columns after all volume columns. Default: False.
     """
     derivatives_dir = Path(derivatives_dir)
     output_file = Path(output_file)
@@ -32,6 +35,7 @@ def aggregate_volumes(derivatives_dir, output_file):
 
         all_data_rows = []
         all_volume_keys = set()  # Keep track of all unique volume keys
+        all_provenance_keys = set()  # Keep track of all unique provenance keys
 
         for json_path in json_files:
             try:
@@ -56,8 +60,25 @@ def aggregate_volumes(derivatives_dir, output_file):
 
                 # Add volumes data
                 row.update(data['volumes'])
-                all_data_rows.append(row)
                 all_volume_keys.update(data['volumes'].keys())
+
+                # Add provenance data if requested
+                if add_provenance:
+                    if 'provenance' in data and isinstance(data['provenance'], dict):
+                        # Prefix provenance keys to avoid conflicts
+                        provenance_dict = {
+                            f'provenance_{k}': v for k, v in data['provenance'].items()
+                        }
+                        row.update(provenance_dict)
+                        all_provenance_keys.update(provenance_dict.keys())
+                    else:
+                        print(
+                            f"WARNING: No 'provenance' dict found in {json_path}. "
+                            "Provenance columns will be empty for this row.",
+                            file=sys.stderr,
+                        )
+
+                all_data_rows.append(row)
 
             except FileNotFoundError:
                 print(f'ERROR: File not found during aggregation: {json_path}', file=sys.stderr)
@@ -74,7 +95,7 @@ def aggregate_volumes(derivatives_dir, output_file):
         # Create DataFrame
         df = pd.DataFrame(all_data_rows)
 
-        # Define column order: IDs first, then sorted volume keys
+        # Define column order: IDs first, then sorted volume keys, then provenance (if requested)
         id_cols = ['subject']
         if 'session' in df.columns:
             id_cols.append('session')
@@ -85,6 +106,11 @@ def aggregate_volumes(derivatives_dir, output_file):
             final_cols = id_cols + ['mrid'] + volume_cols
         else:
             final_cols = id_cols + volume_cols
+
+        # Add provenance columns after all volume columns if requested
+        if add_provenance and all_provenance_keys:
+            provenance_cols = sorted(all_provenance_keys)
+            final_cols = final_cols + provenance_cols
 
         # Reorder and save
         df = df.reindex(columns=final_cols)

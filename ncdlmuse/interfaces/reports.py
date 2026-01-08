@@ -287,9 +287,9 @@ SEGMENTATION_QC_TEMPLATE = """\
 
 SEGMENTATION_QC_ITEM_TEMPLATE = '<li><strong>{name}:</strong> {value:.2f}</li>'
 
-# Define a list of commonly interesting volume keys (snake_case from _create_volumes_json_file)
+# Define a list of commonly interesting volume keys from _create_volumes_json_file
 # These should match the keys in the 'volumes' dictionary within the JSON file
-# after _to_snake_case and potential mapping in _create_volumes_json_file.
+# which uses the original column names from NiChart_DLMUSE.
 DEFAULT_DISPLAY_VOLUMES = [
     'total_gray_matter',
     'total_white_matter',
@@ -310,7 +310,7 @@ class _SegmentationQCSummaryInputSpec(BaseInterfaceInputSpec):
     )
     # Optional: could allow user to specify which volume keys to display
     # display_volume_keys = traits.List(Str, value=DEFAULT_DISPLAY_VOLUMES, usedefault=True,
-    #                                   desc="List of volume keys (snake_case) to display.")
+    #                                   desc="List of volume keys to display.")
 
 
 class _SegmentationQCSummaryOutputSpec(_SummaryOutputSpec):

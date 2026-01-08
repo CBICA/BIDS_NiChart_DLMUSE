@@ -4,7 +4,6 @@
 import os
 import shutil
 import subprocess
-from importlib import resources
 from pathlib import Path
 
 import pandas as pd
@@ -28,8 +27,7 @@ _S2_DLICV_SUBDIR = 's2_dlicv'
 _DLMUSE_SUFFIX = '_DLMUSE.nii.gz'
 _DLICV_SUFFIX = '_DLICV.nii.gz'
 _VOLUMES_CSV_SUFFIX = '_DLMUSE_Volumes.csv'
-_PROCESSED_VOLUMES_TSV = 'dlmuse_volumes_renamed.tsv'
-_ROI_MAPPING_FILE = 'MUSE_ROI_complete_list.csv'
+_PROCESSED_VOLUMES_TSV = 'dlmuse_volumes.tsv'
 
 # Log level constants
 _IMPORTANT_LEVEL = 25  # matches logging.addLevelName(25, 'IMPORTANT') in config
@@ -62,7 +60,7 @@ class NiChartDLMUSEOutputSpec(TraitedSpec):
     dlmuse_segmentation = File(desc='DLMUSE segmentation file (NIfTI)')
     dlicv_mask = File(desc='DLICV brain mask file (NIfTI)')
     dlmuse_volumes = File(
-        desc='DLMUSE volumes TSV file (with renamed headers or original CSV as fallback)'
+        desc='DLMUSE volumes TSV file (converted from CSV) or original CSV as fallback'
     )
     dlmuse_volumes_csv = File(desc='Original DLMUSE volumes CSV file (copied to output dir)')
     raw_outputs_dir = traits.Directory(
@@ -93,12 +91,8 @@ class NiChartDLMUSE(SimpleInterface):
         *   The DLICV mask is placed within a subdirectory ``{cwd}/s2_dlicv`` mirroring the
             raw output structure.
     4.  **Volume Processing:**
-        *   Attempts to load an ROI mapping file (``MUSE_ROI_complete_list.csv``) from
-            package data.
         *   Reads the *copied* volumes CSV file from ``cwd``.
-        *   If mapping is successful, renames columns based on the mapping.
-        *   Saves the (potentially renamed) volumes as a TSV file (``dlmuse_volumes_renamed.tsv``)
-            in ``cwd``.
+        *   Saves the volumes as a TSV file (``dlmuse_volumes.tsv``) in ``cwd``.
     5.  **Output Assignment:** The ``_list_outputs`` method identifies the final output files
         within ``cwd`` (prioritizing the processed TSV for volumes) and returns their paths.
 
@@ -295,38 +289,13 @@ class NiChartDLMUSE(SimpleInterface):
         return runtime
 
     def _process_volumes(self, input_csv_path, output_tsv_path):
-        """Load volumes CSV, rename headers based on mapping, save as TSV."""
+        """Load volumes CSV and save as TSV without renaming headers."""
         logger.info(f'Processing volumes: {input_csv_path} -> {output_tsv_path}')
-
-        # Try to load ROI mapping from package data
-        id_to_name = {}
-        try:
-            mapping_file_res = resources.files('ncdlmuse.data') / _ROI_MAPPING_FILE
-            with resources.as_file(mapping_file_res) as mapping_file_path:
-                mapping_df = pd.read_csv(mapping_file_path)
-                mapping_df['ID'] = mapping_df['ID'].astype(str)  # Ensure ID is string
-                id_to_name = mapping_df.set_index('ID')['Full_Name'].to_dict()
-                logger.info(f'Loaded {len(id_to_name)} ROI mappings from package data.')
-        except FileNotFoundError:
-            logger.warning(f'ROI mapping file not found: {mapping_file_res}')
-        except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
-            logger.error(f'Error parsing ROI mapping file: {e}. Proceeding without renaming.')
-        except OSError as e:
-            logger.error(f'Error accessing ROI mapping file: {e}. Proceeding without renaming.')
 
         # Read and process volumes CSV
         try:
             volumes_df = pd.read_csv(input_csv_path)
-            if id_to_name:
-                # Convert original columns to string for matching keys in id_to_name
-                original_cols_str = volumes_df.columns.astype(str)
-                new_columns = [id_to_name.get(col_str, col_str) for col_str in original_cols_str]
-                volumes_df.columns = new_columns
-                logger.info('Renamed volume columns using ROI mapping.')
-            else:
-                logger.info('No ROI mapping loaded, volume columns not renamed.')
-
-            # Save as TSV
+            # Save as TSV without renaming columns
             volumes_df.to_csv(output_tsv_path, sep='\t', index=False)
             logger.log(
                 _IMPORTANT_LEVEL, f'Successfully wrote processed volumes TSV to: {output_tsv_path}'

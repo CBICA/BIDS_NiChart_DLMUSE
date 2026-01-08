@@ -375,6 +375,8 @@ class execution(_Config):
 
     analysis_level = 'participant'
     """Level of the analysis that will be performed ('participant' or 'group')."""
+    add_provenance = False
+    """Include provenance information in group-level aggregation output."""
     bids_dir = None
     """An existing path to the dataset, which must be BIDS-compliant."""
     bids_database_dir = None

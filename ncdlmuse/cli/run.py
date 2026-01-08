@@ -103,6 +103,7 @@ def main():
             aggregate_volumes(
                 derivatives_dir=output_dir,
                 output_file=group_output_file,
+                add_provenance=config.execution.add_provenance,
             )
             config.loggers.cli.info(
                 f'Finished aggregating ROI volumes. Results are in {group_output_file}.'

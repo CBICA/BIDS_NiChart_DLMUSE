@@ -457,6 +457,21 @@ def _build_parser():
         help='Write workflow graph (.dot/.svg).',
     )
 
+    # --- Group-level Analysis Options ---
+    g_group = parser.add_argument_group('Options for group-level analysis')
+    g_group.add_argument(
+        '--add-provenance',
+        '--add_provenance',
+        dest='add_provenance',
+        action='store_true',
+        default=False,
+        help=(
+            'Include provenance information (version, device, compute node, etc.) '
+            'as additional columns in the group-level output TSV. '
+            'Provenance columns will be added after all volume columns.'
+        ),
+    )
+
     # --- Other Options ---
     g_other = parser.add_argument_group('Other options')
     g_other.add_argument(

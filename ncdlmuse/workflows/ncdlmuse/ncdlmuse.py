@@ -70,7 +70,6 @@ def init_dlmuse_wf(
         Path to the CSV file mapping MUSE ROIs to derived ROIs.
     muse_roi_mappings_file : str or None, optional
         Path to the CSV file mapping MUSE ROIs to consecutive indices.
-        If provided, the output volumes TSV header will be renamed.
     all_in_gpu : bool, optional
         Attempt to load and run the entire model on the GPU (if available) (default: False).
     disable_tta : bool, optional
@@ -95,8 +94,7 @@ def init_dlmuse_wf(
     mask_file
         Path to the raw DLICV brain mask file (within the node's work_dir).
     volumes_file
-        Path to the raw DLMUSE volumes TSV file (with potentially renamed headers,
-        within the node's work_dir).
+        Path to the raw DLMUSE volumes TSV file (within the node's work_dir).
 
     """
 
@@ -149,7 +147,7 @@ def init_dlmuse_wf(
                 [
                     ('dlmuse_segmentation', 'segmentation_file'),
                     ('dlicv_mask', 'mask_file'),
-                    # Pass the volumes file with renamed headers (still in work_dir)
+                    # Pass the volumes file (still in work_dir)
                     ('dlmuse_volumes', 'volumes_file'),
                 ],
             ),
