@@ -47,7 +47,7 @@ dependencies = [
     # NiChart_DLMUSE 0.1.7 dependencies
     "nnunetv2 == 2.5.1",
     "acvl_utils == 0.2.5",
-    "blosc2 == 3.0.0b4"
+    "blosc2 == 4.1.1"
 ]
 dynamic = ["version"]
 
