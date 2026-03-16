@@ -39,7 +39,7 @@ dependencies = [
     "requests",
     "scipy",
     "SimpleITK",
-    "templateflow <= 25.1.1",
+    "templateflow <= 25.1.2",
     "toml",
     "torch >= 2.3.1",
     "nvidia-ml-py",
