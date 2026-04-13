@@ -46,7 +46,7 @@ dependencies = [
     "huggingface_hub",
     # NiChart_DLMUSE 0.1.7 dependencies
     "nnunetv2 == 2.5.1",
-    "acvl_utils == 0.2.5",
+    "acvl_utils == 0.2.6",
     "blosc2 == 3.0.0b4"
 ]
 dynamic = ["version"]
